@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { io } from "socket.io-client";
 import {
     Mic,
     MicOff,
@@ -26,6 +27,8 @@ import { Input } from "@/components/ui/input";
 import ChatPanel from "@/components/ChatPanel";
 import VideoGrid from "@/components/VideoGrid";
 
+const socket = io("http://localhost:4000");
+
 export default function Room() {
     const location = useLocation();
     const navigate = useNavigate();
@@ -34,7 +37,7 @@ export default function Room() {
     const [isMicOn, setIsMicOn] = useState(true);
     const [isCamOn, setIsCamOn] = useState(true);
     const [isTtsOn, setIsTtsOn] = useState(true);
-    const [isConnected] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
     const [copied, setCopied] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [detectedGesture] = useState("");
@@ -59,9 +62,9 @@ export default function Room() {
             isVideoOff: !isCamOn,
             role: role as "signer" | "speaker",
         },
-        // Add remote participants here when they connect
     ]);
 
+    // Initialize media stream and socket connection on mount
     useEffect(() => {
         // if (!name || !roomId || !role) {
         //     navigate("/");
@@ -82,18 +85,29 @@ export default function Room() {
 
         initMediaStream();
 
-        // Cleanup
+        // Setup socket event listeners
+        socket.on("connect", () => {
+            console.log("Connected to server:", socket.id);
+            setIsConnected(true);
+        });
+
+        socket.on("disconnect", () => {
+            console.log("Disconnected from server");
+            setIsConnected(false);
+        });
+
+        // Cleanup on unmount
         return () => {
             if (localStream) {
-                localStream
-                    .getTracks()
-                    .forEach((track: MediaStreamTrack) => track.stop());
+                localStream.getTracks().forEach((track) => track.stop());
             }
+            socket.off("connect");
+            socket.off("disconnect");
         };
     }, []);
 
+    // Update participants when mic/cam state changes
     useEffect(() => {
-        // Update participants state when mic/cam state changes
         setParticipants((prev) =>
             prev.map((p) =>
                 p.isLocal
@@ -104,11 +118,8 @@ export default function Room() {
     }, [isMicOn, isCamOn]);
 
     const handleEndCall = () => {
-        // TODO: Clean up WebRTC connections
         if (localStream) {
-            localStream
-                .getTracks()
-                .forEach((track: MediaStreamTrack) => track.stop());
+            localStream.getTracks().forEach((track) => track.stop());
         }
         navigate("/");
     };
@@ -179,11 +190,10 @@ export default function Room() {
                     </div>
                     <div className="flex items-center gap-3">
                         <div
-                            className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                role === "signer"
-                                    ? "bg-green-500/10 text-green-500"
-                                    : "bg-blue-500/10 text-blue-500"
-                            }`}
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${role === "signer"
+                                ? "bg-green-500/10 text-green-500"
+                                : "bg-blue-500/10 text-blue-500"
+                                }`}
                         >
                             {role === "signer" ? "👋 Signer" : "🎤 Speaker"}{" "}
                             Mode
