@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
     Mic,
     MicOff,
@@ -11,6 +11,8 @@ import {
     Settings,
     Copy,
     Check,
+    MessageSquare,
+    X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +23,8 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import ChatPanel from "@/components/ChatPanel";
+import VideoGrid from "@/components/VideoGrid";
 
 export default function Room() {
     const location = useLocation();
@@ -32,27 +36,104 @@ export default function Room() {
     const [isTtsOn, setIsTtsOn] = useState(true);
     const [isConnected] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [liveTranscript] = useState("");
+    const [isChatOpen, setIsChatOpen] = useState(false);
     const [detectedGesture] = useState("");
     const [sentenceBuffer, setSentenceBuffer] = useState("");
+    const [messages, setMessages] = useState<
+        Array<{
+            id: string;
+            sender: string;
+            message: string;
+            timestamp: Date;
+            type: "text" | "sign" | "speech";
+        }>
+    >([]);
 
-    const remoteVideoRef = useRef<HTMLVideoElement>(null);
-    const localVideoRef = useRef<HTMLVideoElement>(null);
+    const [localStream, setLocalStream] = useState<MediaStream>();
+    const [participants, setParticipants] = useState([
+        {
+            id: "1",
+            name: name || "You",
+            isLocal: true,
+            isMuted: !isMicOn,
+            isVideoOff: !isCamOn,
+            role: role as "signer" | "speaker",
+        },
+        // Add remote participants here when they connect
+    ]);
 
     useEffect(() => {
-        if (!name || !roomId || !role) {
-            navigate("/");
-        }
-    }, [name, roomId, role, navigate]);
+        // if (!name || !roomId || !role) {
+        //     navigate("/");
+        // }
+
+        // Initialize local media stream
+        const initMediaStream = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true,
+                });
+                setLocalStream(stream);
+            } catch (error) {
+                console.error("Error accessing media devices:", error);
+            }
+        };
+
+        initMediaStream();
+
+        // Cleanup
+        return () => {
+            if (localStream) {
+                localStream
+                    .getTracks()
+                    .forEach((track: MediaStreamTrack) => track.stop());
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        // Update participants state when mic/cam state changes
+        setParticipants((prev) =>
+            prev.map((p) =>
+                p.isLocal
+                    ? { ...p, isMuted: !isMicOn, isVideoOff: !isCamOn }
+                    : p,
+            ),
+        );
+    }, [isMicOn, isCamOn]);
 
     const handleEndCall = () => {
         // TODO: Clean up WebRTC connections
+        if (localStream) {
+            localStream
+                .getTracks()
+                .forEach((track: MediaStreamTrack) => track.stop());
+        }
         navigate("/");
     };
 
     const handleSend = () => {
         // TODO: Send sentenceBuffer via signaling
-        setSentenceBuffer("");
+        if (sentenceBuffer.trim()) {
+            handleSendMessage(sentenceBuffer, "sign");
+            setSentenceBuffer("");
+        }
+    };
+
+    const handleSendMessage = (
+        message: string,
+        type: "text" | "sign" | "speech" = "text",
+    ) => {
+        const newMessage = {
+            id: Date.now().toString(),
+            sender: name || "You",
+            message,
+            timestamp: new Date(),
+            type,
+        };
+        setMessages((prev) => [...prev, newMessage]);
+        // TODO: Send message via signaling
     };
 
     const copyRoomId = () => {
@@ -115,25 +196,13 @@ export default function Room() {
             </header>
 
             {/* Main Content */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Video Area */}
+            <div className="flex-1 flex overflow-hidden relative">
+                {/* Video Grid Area */}
                 <div className="flex-1 relative bg-muted/20">
-                    {/* Remote Video */}
-                    <video
-                        ref={remoteVideoRef}
-                        autoPlay
-                        className="w-full h-full object-cover"
+                    <VideoGrid
+                        participants={participants}
+                        localStream={localStream}
                     />
-
-                    {/* Local Video PIP */}
-                    <Card className="absolute top-4 right-4 w-48 h-36 overflow-hidden border-2">
-                        <video
-                            ref={localVideoRef}
-                            autoPlay
-                            muted
-                            className="w-full h-full object-cover scale-x-[-1]"
-                        />
-                    </Card>
 
                     {/* Waiting State */}
                     {!isConnected && (
@@ -154,74 +223,76 @@ export default function Room() {
                             </Card>
                         </div>
                     )}
-                </div>
 
-                {/* Communication Panel */}
-                <div className="w-80 bg-card border-l flex flex-col">
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {/* Live Transcript */}
-                        <Card>
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm">
-                                    Live Transcript
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="bg-muted/50 rounded-lg p-3 min-h-25 max-h-37.5 overflow-y-auto text-sm">
-                                    {liveTranscript || (
-                                        <span className="text-muted-foreground">
-                                            Waiting for speech...
-                                        </span>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Detected Gesture */}
-                        {role === "signer" && (
-                            <Card className="border-green-500/50">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm">
-                                        Detected Gesture
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="bg-green-500/10 rounded-lg p-4 text-center">
-                                        <div className="text-3xl font-bold text-green-500">
-                                            {detectedGesture || "..."}
-                                        </div>
+                    {/* Detected Gesture Overlay for Signers */}
+                    {role === "signer" && detectedGesture && (
+                        <div className="absolute top-4 left-4">
+                            <Card className="border-green-500/50 bg-green-500/10 backdrop-blur-sm">
+                                <CardContent className="p-4">
+                                    <div className="text-sm text-green-500 font-medium mb-1">
+                                        Detected Sign
+                                    </div>
+                                    <div className="text-3xl font-bold text-green-500">
+                                        {detectedGesture}
                                     </div>
                                 </CardContent>
                             </Card>
-                        )}
+                        </div>
+                    )}
 
-                        {/* Sentence Buffer */}
-                        {role === "signer" && (
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm">
-                                        Sentence Buffer
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-2">
-                                    <Input
-                                        value={sentenceBuffer}
-                                        readOnly
-                                        placeholder="Your signs will appear here..."
-                                        className="resize-none"
-                                    />
-                                    <Button
-                                        onClick={handleSend}
-                                        className="w-full"
-                                        disabled={!sentenceBuffer.trim()}
-                                    >
-                                        Send Message
-                                    </Button>
+                    {/* Sentence Buffer for Signers */}
+                    {role === "signer" && (
+                        <div className="absolute bottom-20 left-4 right-4">
+                            <Card className="backdrop-blur-sm bg-card/90">
+                                <CardContent className="p-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-muted-foreground">
+                                            Building sentence...
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            value={sentenceBuffer}
+                                            readOnly
+                                            placeholder="Your signs will appear here..."
+                                            className="flex-1"
+                                        />
+                                        <Button
+                                            onClick={handleSend}
+                                            disabled={!sentenceBuffer.trim()}
+                                            size="icon"
+                                        >
+                                            <Check className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </CardContent>
                             </Card>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
+
+                {/* Chat Panel Sidebar (Toggleable) */}
+                {isChatOpen && (
+                    <div className="w-80 bg-card border-l flex flex-col relative">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-2 right-2 z-10"
+                            onClick={() => setIsChatOpen(false)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                        <div className="flex-1 overflow-hidden p-4">
+                            <ChatPanel
+                                messages={messages}
+                                onSendMessage={(msg) =>
+                                    handleSendMessage(msg, "text")
+                                }
+                                currentUser={name || "You"}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Control Bar */}
@@ -270,6 +341,14 @@ export default function Room() {
                         ) : (
                             <VolumeX className="h-5 w-5" />
                         )}
+                    </Button>
+                    <Button
+                        size="lg"
+                        variant={isChatOpen ? "default" : "outline"}
+                        onClick={() => setIsChatOpen(!isChatOpen)}
+                        className="h-12 w-12 rounded-full p-0"
+                    >
+                        <MessageSquare className="h-5 w-5" />
                     </Button>
                 </div>
             </div>

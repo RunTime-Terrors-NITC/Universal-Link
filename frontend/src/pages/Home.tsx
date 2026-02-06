@@ -73,7 +73,7 @@ export default function Home() {
                     </div>
 
                     {/* Join Room Card */}
-                    <Card className="max-w-2xl mx-auto border-2 shadow-xl">
+                    <Card className="max-w-2xl mb-12 mx-auto border-2 shadow-xl">
                         <CardHeader className="text-center">
                             <CardTitle className="text-2xl">
                                 Get Started
@@ -200,23 +200,7 @@ export default function Home() {
 
 
 
-                    {/* Tech Stack */}
-                    <div className="mt-12 text-center">
-                        <p className="text-sm text-muted-foreground mb-4">
-                            Powered by
-                        </p>
-                        <div className="flex flex-wrap justify-center gap-6 text-sm font-medium text-muted-foreground">
-                            <span>React 19</span>
-                            <span>•</span>
-                            <span>WebRTC</span>
-                            <span>•</span>
-                            <span>MediaPipe</span>
-                            <span>•</span>
-                            <span>TensorFlow.js</span>
-                            <span>•</span>
-                            <span>Socket.io</span>
-                        </div>
-                    </div>
+                    
                 </div>
             </main>
         </div>
