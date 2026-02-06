@@ -46,9 +46,7 @@ export default function Home() {
                         </div>
                         <h1 className="text-2xl font-bold">Universal Link</h1>
                     </div>
-                    <Button variant="outline" size="sm">
-                        About
-                    </Button>
+
                 </div>
             </header>
 
@@ -72,39 +70,6 @@ export default function Home() {
                             AI-powered sign language recognition and real-time
                             translation. Under 200ms latency.
                         </p>
-                    </div>
-
-                    {/* Features */}
-                    <div className="grid md:grid-cols-3 gap-6 mb-12">
-                        <Card className="border-2">
-                            <CardHeader>
-                                <Video className="h-10 w-10 text-primary mb-2" />
-                                <CardTitle>WebRTC Video</CardTitle>
-                                <CardDescription>
-                                    Low-latency peer-to-peer video communication
-                                </CardDescription>
-                            </CardHeader>
-                        </Card>
-                        <Card className="border-2">
-                            <CardHeader>
-                                <Hand className="h-10 w-10 text-primary mb-2" />
-                                <CardTitle>Hand Tracking</CardTitle>
-                                <CardDescription>
-                                    Real-time sign language detection with
-                                    MediaPipe
-                                </CardDescription>
-                            </CardHeader>
-                        </Card>
-                        <Card className="border-2">
-                            <CardHeader>
-                                <Shield className="h-10 w-10 text-primary mb-2" />
-                                <CardTitle>Private & Secure</CardTitle>
-                                <CardDescription>
-                                    End-to-end encryption with direct P2P
-                                    connections
-                                </CardDescription>
-                            </CardHeader>
-                        </Card>
                     </div>
 
                     {/* Join Room Card */}
@@ -199,6 +164,41 @@ export default function Home() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* Features */}
+                    <div className="grid md:grid-cols-3 gap-6 mb-12">
+                        <Card className="border-2">
+                            <CardHeader>
+                                <Video className="h-10 w-10 text-primary mb-2" />
+                                <CardTitle>WebRTC Video</CardTitle>
+                                <CardDescription>
+                                    Low-latency peer-to-peer video communication
+                                </CardDescription>
+                            </CardHeader>
+                        </Card>
+                        <Card className="border-2">
+                            <CardHeader>
+                                <Hand className="h-10 w-10 text-primary mb-2" />
+                                <CardTitle>Hand Tracking</CardTitle>
+                                <CardDescription>
+                                    Real-time sign language detection with
+                                    MediaPipe
+                                </CardDescription>
+                            </CardHeader>
+                        </Card>
+                        <Card className="border-2">
+                            <CardHeader>
+                                <Shield className="h-10 w-10 text-primary mb-2" />
+                                <CardTitle>Private & Secure</CardTitle>
+                                <CardDescription>
+                                    End-to-end encryption with direct P2P
+                                    connections
+                                </CardDescription>
+                            </CardHeader>
+                        </Card>
+                    </div>
+
+
 
                     {/* Tech Stack */}
                     <div className="mt-12 text-center">
