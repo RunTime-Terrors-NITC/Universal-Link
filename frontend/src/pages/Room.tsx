@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
+import { io } from "socket.io-client";
 import {
     Mic,
     MicOff,
@@ -22,6 +23,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+const socket = io("http://localhost:4000");
+
 export default function Room() {
     const location = useLocation();
     const navigate = useNavigate();
@@ -30,7 +33,7 @@ export default function Room() {
     const [isMicOn, setIsMicOn] = useState(true);
     const [isCamOn, setIsCamOn] = useState(true);
     const [isTtsOn, setIsTtsOn] = useState(true);
-    const [isConnected] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
     const [copied, setCopied] = useState(false);
     const [liveTranscript] = useState("");
     const [detectedGesture] = useState("");
@@ -39,11 +42,28 @@ export default function Room() {
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
     const localVideoRef = useRef<HTMLVideoElement>(null);
 
+    // useEffect(() => {
+    //     if (!name || !roomId || !role) {
+    //         navigate("/");
+    //     }
+    // }, [name, roomId, role, navigate]);
+
     useEffect(() => {
-        if (!name || !roomId || !role) {
-            navigate("/");
-        }
-    }, [name, roomId, role, navigate]);
+        socket.on("connect", () => {
+            console.log("Connected to server:", socket.id);
+            setIsConnected(true);
+        });
+
+        socket.on("disconnect", () => {
+            console.log("Disconnected from server");
+            setIsConnected(false);
+        });
+
+        return () => {
+            socket.off("connect");
+            socket.off("disconnect");
+        };
+    }, []);
 
     const handleEndCall = () => {
         // TODO: Clean up WebRTC connections
@@ -98,11 +118,10 @@ export default function Room() {
                     </div>
                     <div className="flex items-center gap-3">
                         <div
-                            className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                role === "signer"
-                                    ? "bg-green-500/10 text-green-500"
-                                    : "bg-blue-500/10 text-blue-500"
-                            }`}
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${role === "signer"
+                                ? "bg-green-500/10 text-green-500"
+                                : "bg-blue-500/10 text-blue-500"
+                                }`}
                         >
                             {role === "signer" ? "👋 Signer" : "🎤 Speaker"}{" "}
                             Mode
