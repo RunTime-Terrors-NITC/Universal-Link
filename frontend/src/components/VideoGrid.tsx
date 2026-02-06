@@ -31,15 +31,6 @@ export default function VideoGrid({
         return "grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
     };
 
-    const getInitials = (name: string) => {
-        return name
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .toUpperCase()
-            .slice(0, 2);
-    };
-
     return (
         <div
             className={`grid gap-4 h-full p-4 ${getGridLayout(participants.length)}`}

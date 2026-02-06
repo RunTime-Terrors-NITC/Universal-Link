@@ -12,7 +12,7 @@ interface Message {
     sender: string;
     message: string;
     timestamp: Date;
-    type: "text" | "sign" | "speech";
+    type: null | "sign-text";
 }
 
 interface ChatPanelProps {
@@ -51,26 +51,18 @@ export default function ChatPanel({
             .slice(0, 2);
     };
 
-    const getMessageTypeColor = (type: string) => {
-        switch (type) {
-            case "sign":
-                return "bg-green-500/10 text-green-500 border-green-500/20";
-            case "speech":
-                return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-            default:
-                return "bg-muted text-muted-foreground";
+    const getMessageTypeColor = (type: string | null) => {
+        if (type === "sign-text") {
+            return "bg-green-500/10 text-green-500 border-green-500/20";
         }
+        return "";
     };
 
-    const getMessageTypeLabel = (type: string) => {
-        switch (type) {
-            case "sign":
-                return "👋 Sign";
-            case "speech":
-                return "🎤 Speech";
-            default:
-                return "Text";
+    const getMessageTypeLabel = (type: string | null) => {
+        if (type === "sign-text") {
+            return "👋 Sign";
         }
+        return null;
     };
 
     return (
@@ -112,14 +104,16 @@ export default function ChatPanel({
                                                 <span className="text-xs font-medium">
                                                     {msg.sender}
                                                 </span>
-                                                <Badge
-                                                    variant="outline"
-                                                    className={`text-xs ${getMessageTypeColor(msg.type)}`}
-                                                >
-                                                    {getMessageTypeLabel(
-                                                        msg.type,
-                                                    )}
-                                                </Badge>
+                                                {msg.type === "sign-text" && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={`text-xs ${getMessageTypeColor(msg.type)}`}
+                                                    >
+                                                        {getMessageTypeLabel(
+                                                            msg.type,
+                                                        )}
+                                                    </Badge>
+                                                )}
                                             </div>
                                             <div
                                                 className={`rounded-lg px-3 py-2 max-w-[80%] ${

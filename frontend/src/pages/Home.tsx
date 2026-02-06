@@ -46,7 +46,6 @@ export default function Home() {
                         </div>
                         <h1 className="text-2xl font-bold">Universal Link</h1>
                     </div>
-
                 </div>
             </header>
 
@@ -197,10 +196,6 @@ export default function Home() {
                             </CardHeader>
                         </Card>
                     </div>
-
-
-
-                    
                 </div>
             </main>
         </div>

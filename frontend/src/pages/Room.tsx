@@ -45,7 +45,7 @@ export default function Room() {
             sender: string;
             message: string;
             timestamp: Date;
-            type: "text" | "sign" | "speech";
+            type: null | "sign-text";
         }>
     >([]);
 
@@ -116,14 +116,14 @@ export default function Room() {
     const handleSend = () => {
         // TODO: Send sentenceBuffer via signaling
         if (sentenceBuffer.trim()) {
-            handleSendMessage(sentenceBuffer, "sign");
+            handleSendMessage(sentenceBuffer, "sign-text");
             setSentenceBuffer("");
         }
     };
 
     const handleSendMessage = (
         message: string,
-        type: "text" | "sign" | "speech" = "text",
+        type: null | "sign-text" = null,
     ) => {
         const newMessage = {
             id: Date.now().toString(),
@@ -286,7 +286,7 @@ export default function Room() {
                             <ChatPanel
                                 messages={messages}
                                 onSendMessage={(msg) =>
-                                    handleSendMessage(msg, "text")
+                                    handleSendMessage(msg, null)
                                 }
                                 currentUser={name || "You"}
                             />
