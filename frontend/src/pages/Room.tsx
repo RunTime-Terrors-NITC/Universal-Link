@@ -14,6 +14,8 @@ import {
     Check,
     MessageSquare,
     X,
+    Hand,
+    MoreVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +42,8 @@ export default function Room() {
     const [isConnected, setIsConnected] = useState(false);
     const [copied, setCopied] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+    const [isSignMode, setIsSignMode] = useState(false);
     const [detectedGesture] = useState("");
     const [sentenceBuffer, setSentenceBuffer] = useState("");
     const [messages, setMessages] = useState<
@@ -154,7 +158,7 @@ export default function Room() {
     };
 
     return (
-        <div className="min-h-screen bg-background flex flex-col">
+        <div className="h-screen bg-background flex flex-col overflow-hidden">
             {/* Header */}
             <header className="border-b bg-card">
                 <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -190,10 +194,11 @@ export default function Room() {
                     </div>
                     <div className="flex items-center gap-3">
                         <div
-                            className={`px-3 py-1 rounded-full text-sm font-medium ${role === "signer"
-                                ? "bg-green-500/10 text-green-500"
-                                : "bg-blue-500/10 text-blue-500"
-                                }`}
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                role === "signer"
+                                    ? "bg-green-500/10 text-green-500"
+                                    : "bg-blue-500/10 text-blue-500"
+                            }`}
                         >
                             {role === "signer" ? "👋 Signer" : "🎤 Speaker"}{" "}
                             Mode
@@ -340,18 +345,90 @@ export default function Room() {
                     >
                         <PhoneOff className="h-5 w-5" />
                     </Button>
-                    <Button
-                        size="lg"
-                        variant={isTtsOn ? "default" : "outline"}
-                        onClick={() => setIsTtsOn(!isTtsOn)}
-                        className="h-12 w-12 rounded-full p-0"
-                    >
-                        {isTtsOn ? (
-                            <Volume2 className="h-5 w-5" />
-                        ) : (
-                            <VolumeX className="h-5 w-5" />
+                    <div className="relative">
+                        <Button
+                            size="lg"
+                            variant={isOptionsOpen ? "default" : "outline"}
+                            onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+                            className="h-12 w-12 rounded-full p-0"
+                        >
+                            <MoreVertical className="h-5 w-5" />
+                        </Button>
+                        {isOptionsOpen && (
+                            <>
+                                <div
+                                    className="fixed inset-0"
+                                    onClick={() => setIsOptionsOpen(false)}
+                                />
+                                <Card className="absolute bottom-full mb-2 py-0 left-1/2 -translate-x-1/2 w-56 shadow-lg z-50">
+                                    <CardContent className="p-1">
+                                        <button
+                                            onClick={() => {
+                                                setIsSignMode(!isSignMode);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-3 py-3 rounded-md hover:bg-muted transition-colors text-left"
+                                        >
+                                            <Hand className="h-5 w-5" />
+                                            <div className="flex-1">
+                                                <div className="font-medium text-sm">
+                                                    Sign Mode
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {isSignMode
+                                                        ? "Enabled"
+                                                        : "Disabled"}
+                                                </div>
+                                            </div>
+                                            <div
+                                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
+                                                    isSignMode
+                                                        ? "bg-primary border-primary"
+                                                        : "border-muted-foreground"
+                                                }`}
+                                            >
+                                                {isSignMode && (
+                                                    <Check className="h-3 w-3 text-primary-foreground" />
+                                                )}
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsTtsOn(!isTtsOn);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-3 py-3 rounded-md hover:bg-muted transition-colors text-left"
+                                        >
+                                            {isTtsOn ? (
+                                                <Volume2 className="h-5 w-5" />
+                                            ) : (
+                                                <VolumeX className="h-5 w-5" />
+                                            )}
+                                            <div className="flex-1">
+                                                <div className="font-medium text-sm">
+                                                    Mute Sound
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {isTtsOn
+                                                        ? "Sound On"
+                                                        : "Sound Off"}
+                                                </div>
+                                            </div>
+                                            <div
+                                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
+                                                    !isTtsOn
+                                                        ? "bg-primary border-primary"
+                                                        : "border-muted-foreground"
+                                                }`}
+                                            >
+                                                {!isTtsOn && (
+                                                    <Check className="h-3 w-3 text-primary-foreground" />
+                                                )}
+                                            </div>
+                                        </button>
+                                    </CardContent>
+                                </Card>
+                            </>
                         )}
-                    </Button>
+                    </div>
                     <Button
                         size="lg"
                         variant={isChatOpen ? "default" : "outline"}

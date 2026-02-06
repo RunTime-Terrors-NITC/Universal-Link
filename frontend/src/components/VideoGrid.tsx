@@ -34,6 +34,7 @@ export default function VideoGrid({
     return (
         <div
             className={`grid gap-4 h-full p-4 ${getGridLayout(participants.length)}`}
+            style={{ gridAutoRows: "minmax(0, 1fr)" }}
         >
             {participants.map((participant) => (
                 <VideoTile
@@ -71,7 +72,7 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
     };
 
     return (
-        <Card className="relative overflow-hidden bg-muted/20 aspect-video group">
+        <Card className="relative overflow-hidden bg-muted/20 h-full group">
             {/* Video Element */}
             {!participant.isVideoOff && (participant.stream || localStream) ? (
                 <video

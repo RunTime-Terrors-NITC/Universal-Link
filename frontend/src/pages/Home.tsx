@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Hand, Mic, Video, Sparkles, Zap, Shield } from "lucide-react";
+import {
+    Hand,
+    Mic,
+    Video,
+    Sparkles,
+    Zap,
+    Shield,
+    Plus,
+    LogIn,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -22,21 +31,29 @@ export default function Home() {
         setRoomId(id);
     };
 
-    const joinAs = (role: "signer" | "speaker") => {
+    const handleJoinRoom = (action: "create" | "join") => {
         if (!name.trim()) {
             alert("Please enter your display name");
             return;
         }
+
+        if (action === "join" && !roomId.trim()) {
+            alert("Please enter a room ID to join");
+            return;
+        }
+
         const finalRoomId =
-            roomId.trim() ||
-            Math.random().toString(36).substring(2, 8).toUpperCase();
+            action === "create"
+                ? Math.random().toString(36).substring(2, 8).toUpperCase()
+                : roomId.trim().toUpperCase();
+
         navigate("/room", {
-            state: { name: name.trim(), roomId: finalRoomId, role },
+            state: { name: name.trim(), roomId: finalRoomId, role: "speaker" },
         });
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+        <div className="min-h-screen bg-linear-to-br from-background via-background to-muted/20">
             {/* Header */}
             <header className="border-b backdrop-blur-sm bg-background/80">
                 <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -123,39 +140,39 @@ export default function Home() {
                                 </div>
                             </div>
 
-                            {/* Role Selection */}
+                            {/* Room Action Buttons */}
                             <div className="space-y-3">
                                 <Label className="text-base">
-                                    Choose Your Mode
+                                    Join or Create Room
                                 </Label>
                                 <div className="grid md:grid-cols-2 gap-4">
                                     <Button
                                         size="lg"
                                         className="h-auto py-6 flex-col gap-2 bg-green-600 hover:bg-green-700"
-                                        onClick={() => joinAs("signer")}
+                                        onClick={() => handleJoinRoom("create")}
                                     >
-                                        <Hand className="h-8 w-8" />
+                                        <Plus className="h-8 w-8" />
                                         <div className="space-y-1">
                                             <div className="font-semibold text-lg">
-                                                Join as Signer
+                                                Create Room
                                             </div>
                                             <div className="text-xs opacity-90">
-                                                I use Sign Language
+                                                Start a new session
                                             </div>
                                         </div>
                                     </Button>
                                     <Button
                                         size="lg"
                                         className="h-auto py-6 flex-col gap-2 bg-blue-600 hover:bg-blue-700"
-                                        onClick={() => joinAs("speaker")}
+                                        onClick={() => handleJoinRoom("join")}
                                     >
-                                        <Mic className="h-8 w-8" />
+                                        <LogIn className="h-8 w-8" />
                                         <div className="space-y-1">
                                             <div className="font-semibold text-lg">
-                                                Join as Speaker
+                                                Join Room
                                             </div>
                                             <div className="text-xs opacity-90">
-                                                I use Speech
+                                                Enter existing room
                                             </div>
                                         </div>
                                     </Button>
