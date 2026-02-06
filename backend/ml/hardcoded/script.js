@@ -7,6 +7,8 @@ const hands = new Hands({
     `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
 
+let lastGesture=null;
+
 hands.setOptions({
     maxNumHands: 1, 
     modelComplexity: 1,
@@ -24,6 +26,7 @@ function getFingerStates(lm) {
         middle: isFingerOpen(lm[12], lm[10], lm[9]),
         ring:   isFingerOpen(lm[16], lm[14], lm[13]),
         pinky:  isFingerOpen(lm[20], lm[18], lm[17]),
+        thumb:  isFingerOpen(lm[4], lm[3], lm[2]),
     };
 }
 
@@ -35,6 +38,37 @@ function isPeaceGesture(fingers) {
         !fingers.pinky
     );
 }
+
+function isFist(fingers) {
+    return (
+        !fingers.thumb&&
+        !fingers.index &&
+        !fingers.middle &&
+        !fingers.ring &&
+        !fingers.pinky
+    );
+}
+
+function isThumb(fingers) {
+    return (
+        fingers.thumb&&
+        !fingers.index &&
+        !fingers.middle &&
+        !fingers.ring &&
+        !fingers.pinky
+    );
+}
+
+function isHello(fingers) {
+    return (
+        fingers.thumb &&
+        fingers.index &&
+        fingers.middle &&
+        fingers.ring &&
+        fingers.pinky
+    );
+}
+
 function isBird(fingers) {
     return (
         !fingers.index &&
@@ -61,11 +95,25 @@ hands.onResults(results => {
 
         const fingers = getFingerStates(lm);
 
-        if (isPeaceGesture(fingers)) {
-        console.log("✌️ PEACE");
+        if (lastGesture!="PEACE" && isPeaceGesture(fingers)) {
+            console.log("✌️ PEACE");
+            lastGesture="PEACE";
         }
-        if(isBird(fingers)){
+        if(lastGesture!="BIRD" && isBird(fingers)){
             console.log("Fuck Off");
+            lastGesture="BIRD"
+        }
+        if(lastGesture!="HELLO" && isHello(fingers)){
+            console.log("Hey");
+            lastGesture="HELLO"
+        }
+        if(lastGesture!="FIST" && isFist(fingers)){
+            console.log("Punch");
+            lastGesture="FIST"
+        }
+        if(lastGesture!="THUMBS" && isThumb(fingers)){
+            console.log("Thumbs Up");
+            lastGesture="THUMBS"
         }
     }
 });
