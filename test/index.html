@@ -4,6 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
     <title>LAN Video Call (Manual Signaling)</title>
     <style>
         :root {
@@ -183,6 +187,67 @@
             background: #4d1a1a;
             color: #f88;
         }
+
+.gesture-display {
+    /* gesture display container */
+    background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.gesture-display h3 {
+    margin: 0 0 10px 0;
+    color: var(--accent-color);
+    font-size: 1rem;
+}
+
+        .gesture-messages {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .gesture-message {
+            padding: 6px 10px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            border-left: 3px solid transparent;
+        }
+
+        .gesture-sent {
+            background: rgba(187, 134, 252, 0.1);
+            border-left-color: var(--accent-color);
+            text-align: right;
+        }
+
+        .gesture-received {
+            background: rgba(3, 218, 198, 0.1);
+            border-left-color: var(--success-color);
+        }
+
+        .gesture-time {
+            font-size: 0.7rem;
+            color: #666;
+            margin-left: 8px;
+        }
+
+        .debug-log {
+            margin-top: 15px;
+            padding: 10px;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 6px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.75rem;
+        }
     </style>
 </head>
 
@@ -194,12 +259,22 @@
         <!-- Video Area -->
         <div class="video-grid">
             <div class="video-wrapper">
-                <video id="localVideo" autoplay playsinline muted></video>
+                <video id="myvideo" autoplay playsinline muted></video>
+                <canvas id="canvas"></canvas>
                 <div class="label">You</div>
             </div>
             <div class="video-wrapper">
                 <video id="remoteVideo" autoplay playsinline></video>
                 <div class="label">Remote</div>
+            </div>
+        </div>
+
+        <div class="gesture-display">
+            <h3>Gesture Communications</h3>
+            <div class="gesture-messages" id="gesture-messages">
+                <div style="text-align: center; color: #666; padding: 20px;">
+                        No gestures yet. Start the call and make hand gestures!
+                    </div>
             </div>
         </div>
 
@@ -210,7 +285,7 @@
             <div class="step">
                 <h3>1. Start</h3>
                 <p style="font-size: 0.9rem; color: #aaa;">Allow camera/mic access to begin.</p>
-                <button id="initBtn" onclick="init()">Initialize Camera</button>
+                <button id="initBtn" onclick="initApp()">Initialize Camera</button>
             </div>
 
             <div class="step" id="step-create" style="display:none;">
@@ -242,261 +317,8 @@
         </div>
     </div>
 
-    <script>
-        const config = {
-            iceServers: [
-                { urls: "stun:stun.l.google.com:19302" },
-                { urls: "stun:stun1.l.google.com:19302" },
-                { urls: "stun:stun2.l.google.com:19302" },
-                { urls: "stun:stun3.l.google.com:19302" },
-                { urls: "stun:stun4.l.google.com:19302" }
-            ]
-        };
-
-        let pc;
-        let localStream;
-
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
-        const initBtn = document.getElementById('initBtn');
-        const statusMsg = document.getElementById('status-msg');
-
-        // Helpers for UI
-        function showStatus(msg, type = 'waiting') {
-            statusMsg.textContent = msg;
-            statusMsg.className = `status-${type}`;
-            statusMsg.style.display = 'block';
-        }
-
-        // Logger helper
-        function log(msg, type = 'info') {
-            const el = document.createElement('div');
-            el.textContent = `[${type.toUpperCase()}] ${msg}`;
-            el.style.fontFamily = 'monospace';
-            el.style.fontSize = '0.8rem';
-            el.style.color = type === 'error' ? '#ff5555' : '#aaa';
-            el.style.borderBottom = '1px solid #333';
-            const logContainer = document.getElementById('debug-log') || createLogContainer();
-            logContainer.prepend(el);
-        }
-
-        function createLogContainer() {
-            const div = document.createElement('div');
-            div.id = 'debug-log';
-            div.style.marginTop = '20px';
-            div.style.padding = '10px';
-            div.style.background = '#000';
-            div.style.border = '1px solid #333';
-            div.style.maxHeight = '150px';
-            div.style.overflowY = 'auto';
-            document.querySelector('.container').appendChild(div);
-            return div;
-        }
-
-        async function init() {
-            try {
-                showStatus("Initializing...", "waiting");
-                log("Starting initialization...");
-
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error("navigator.mediaDevices.getUserMedia is NOT supported in this browser/context. Are you using HTTP? Try localhost or HTTPS.");
-                }
-
-                // Try getting both video and audio
-                try {
-                    log("Requesting Video+Audio...");
-                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    log("Got Video+Audio stream.");
-                } catch (e) {
-                    log("Video+Audio failed: " + e.message, "error");
-
-                    // Fallback: Try Video only
-                    try {
-                        log("Requesting Video Only...");
-                        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                        showStatus("Microphone not found, using video only.", "waiting");
-                        log("Got Video Only stream.");
-                    } catch (e2) {
-                        log("Video Only failed: " + e2.message, "error");
-
-                        // Fallback: Try Audio only
-                        try {
-                            log("Requesting Audio Only...");
-                            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-                            showStatus("Camera not found, using audio only.", "waiting");
-                            log("Got Audio Only stream.");
-
-                            // Offer to add fake video for testing purposes
-                            if (confirm("Camera failed, but Mic works. Add a 'Fake Video' stream to test the video connection?")) {
-                                const fakeStream = createFakeStream();
-                                const videoTrack = fakeStream.getVideoTracks()[0];
-                                localStream.addTrack(videoTrack);
-                                log("Added FAKE video track to Real audio.");
-                            }
-
-                        } catch (e3) {
-                            log("Audio Only failed: " + e3.message, "error");
-                            // Fallback: Simulate Camera (Canvas) if completely failed
-                            if (confirm("Camera/Mic failed (" + e3.name + "). Use simulated (fake) camera to test connection?")) {
-                                localStream = createFakeStream();
-                                log("Using FAKE stream.");
-                            } else {
-                                throw e; // Give up
-                            }
-                        }
-                    }
-                }
-
-                // If we got a stream (real or fake), show it
-                if (localStream.getVideoTracks().length > 0) {
-                    localVideo.srcObject = localStream;
-                } else {
-                    // Audio only - show a placeholder or keep black
-                    localVideo.style.background = "#222";
-                    const label = localVideo.parentElement.querySelector('.label');
-                    label.textContent = "You (Audio Only)";
-                }
-
-                createPeerConnection();
-
-                initBtn.parentElement.style.display = 'none'; // Hide step 1
-                document.getElementById('step-create').style.display = 'block';
-                document.getElementById('step-data').style.display = 'block';
-
-                if (statusMsg.className !== "status-waiting") {
-                    showStatus("Ready. Choose 'Start Call' or paste a code from a friend.", "waiting");
-                }
-            } catch (e) {
-                console.error(e);
-                let msg = "Error: " + e.message;
-                if (e.name === "NotFoundError") msg = "No device found.";
-                if (e.name === "NotAllowedError") msg = "Permission denied.";
-
-                showStatus(msg, "error");
-                log(e.stack, "error");
-            }
-        }
-
-        function createFakeStream() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 640;
-            canvas.height = 480;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#333';
-            ctx.fillRect(0, 0, 640, 480);
-            ctx.fillStyle = '#fff';
-            ctx.font = '40px Arial';
-            ctx.fillText('NO CAMERA', 200, 240);
-
-            // Animation to prove it's live
-            setInterval(() => {
-                ctx.fillStyle = '#333';
-                ctx.fillRect(0, 0, 640, 480);
-                ctx.fillStyle = '#' + Math.floor(Math.random() * 16777215).toString(16);
-                ctx.fillText('TEST VIDEO ' + Date.now(), 100, 240);
-            }, 1000);
-
-            const stream = canvas.captureStream(30);
-            // Add a dummy audio track so logic holding audio doesn't break
-            try {
-                const audioCtx = new AudioContext();
-                const osc = audioCtx.createOscillator();
-                const dst = audioCtx.createMediaStreamDestination();
-                osc.connect(dst);
-                osc.start();
-                const track = dst.stream.getAudioTracks()[0];
-                stream.addTrack(track);
-            } catch (e) { log("Could not create fake audio: " + e) }
-
-            return stream;
-        }
-
-        function createPeerConnection() {
-            pc = new RTCPeerConnection(config);
-
-            // Add local tracks
-            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-            // Handle remote track
-            pc.ontrack = (event) => {
-                console.log("Remote track received");
-                remoteVideo.srcObject = event.streams[0];
-            };
-
-            // ICE Candidate handling
-            pc.onicecandidate = (event) => {
-                if (event.candidate === null) {
-                    // ICE gathering complete
-                    document.getElementById('localSdp').value = JSON.stringify(pc.localDescription);
-                    showStatus("Code generated! Copy 'Your Code' and send it.", "ready");
-                }
-            };
-
-            pc.oniceconnectionstatechange = () => {
-                console.log("ICE State:", pc.iceConnectionState);
-                if (pc.iceConnectionState === 'connected') {
-                    showStatus("Connected!", "ready");
-                }
-                if (pc.iceConnectionState === 'disconnected') {
-                    showStatus("Disconnected", "error");
-                }
-            }
-        }
-
-        async function createOffer() {
-            showStatus("Generating offer... please wait for code.", "waiting");
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            // wait for onicecandidate (null) to populate text area with full SDP+ICE
-        }
-
-        async function createAnswer() {
-            showStatus("Generating answer... please wait for code.", "waiting");
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            // wait for onicecandidate (null) to populate text area
-        }
-
-        async function handleRemoteSdp() {
-            const remoteDataStr = document.getElementById('remoteSdp').value;
-            if (!remoteDataStr) {
-                alert("Please paste the remote code first!");
-                return;
-            }
-
-            try {
-                const remoteDesc = JSON.parse(remoteDataStr);
-                await pc.setRemoteDescription(remoteDesc);
-
-                if (remoteDesc.type === 'offer') {
-                    // If we just received an offer, we need to answer it
-                    await createAnswer();
-                } else {
-                    // If we just received an answer, we are done
-                    showStatus("Answer processed. Connection establishing...", "waiting");
-                }
-
-            } catch (e) {
-                console.error(e);
-                showStatus("Invalid code or error processing: " + e.message, "error");
-            }
-        }
-
-        function copyToClipboard(elementId) {
-            const copyText = document.getElementById(elementId);
-            copyText.select();
-            document.execCommand("copy"); // Fallback for older browsers/http
-
-            // Try modern API if available
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(copyText.value);
-            }
-
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = "Copied!";
-            setTimeout(() => btn.textContent = originalText, 1500);
-        }
+    <script src="./index.js">
+       
     </script>
 </body>
 
