@@ -12,6 +12,7 @@ interface Participant {
     isVideoOff?: boolean;
     isLocal?: boolean;
     role?: "signer" | "speaker";
+    caption?: string;
 }
 
 interface VideoGridProps {
@@ -158,6 +159,15 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
                         id={`hand-canvas-${participant.id}`}
                         className="opacity-0 group-hover:opacity-60 transition-opacity"
                     />
+                </div>
+            )}
+
+            {/* Caption Overlay */}
+            {participant.caption && (
+                <div className="absolute bottom-16 left-4 right-4 text-center pointer-events-none">
+                    <span className="inline-block px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg text-white text-lg font-medium shadow-sm border border-white/10">
+                        {participant.caption}
+                    </span>
                 </div>
             )}
         </Card>

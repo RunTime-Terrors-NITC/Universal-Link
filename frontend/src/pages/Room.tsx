@@ -17,6 +17,7 @@ import {
     Hand,
     MoreVertical,
     Users,
+    MessageSquareText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,8 @@ export default function Room() {
     const [isSignMode, setIsSignMode] = useState(false);
     const [detectedGesture] = useState("");
     const [sentenceBuffer, setSentenceBuffer] = useState("");
+    const [captions, setCaptions] = useState<Record<string, string>>({});
+    const [isSimulatingCaptions, setIsSimulatingCaptions] = useState(false);
     const [messages, setMessages] = useState<
         Array<{
             id: string;
@@ -78,10 +81,29 @@ export default function Room() {
         },
     ]);
 
-    const { remoteStreams } = useWebRTC({
+    const { remoteStreams, sendMessage } = useWebRTC({
         roomId: roomId || "",
         socket,
         localStream,
+        onMessage: (peerId, message) => {
+            setCaptions((prev) => ({
+                ...prev,
+                [peerId]: message,
+            }));
+
+            // Clear caption after 3 seconds if not replaced
+            // (Optional, but let's keep it simple for now as per user request "every second")
+            setTimeout(() => {
+                setCaptions((prev) => {
+                    if (prev[peerId] === message) {
+                        const newCaptions = { ...prev };
+                        delete newCaptions[peerId];
+                        return newCaptions;
+                    }
+                    return prev;
+                });
+            }, 3000);
+        }
     });
 
     // Redirect if missing required params
@@ -173,6 +195,42 @@ export default function Room() {
         }
     }, [isCamOn, localStream]);
 
+    useEffect(() => {
+        let interval: any;
+
+        if (isSimulatingCaptions) {
+            let count = 0;
+            interval = setInterval(() => {
+                count++;
+                const dummyText = `dummy${count}`;
+                sendMessage(dummyText);
+
+                // Also show it locally
+                setCaptions((prev) => ({
+                    ...prev,
+                    local: dummyText,
+                }));
+
+                // Clear local caption after 3s
+                setTimeout(() => {
+                    setCaptions((prev) => {
+                        if (prev.local === dummyText) {
+                            const newCaptions = { ...prev };
+                            delete newCaptions.local;
+                            return newCaptions;
+                        }
+                        return prev;
+                    });
+                }, 3000);
+
+            }, 1000);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isSimulatingCaptions, sendMessage]);
+
     // Update participants list with local and remote streams
     useEffect(() => {
         const remotePeers = Array.from(remoteStreams.entries()).map(
@@ -184,6 +242,7 @@ export default function Room() {
                 isVideoOff: false,
                 role: "speaker" as const,
                 stream,
+                caption: captions[id],
             }),
         );
 
@@ -195,6 +254,7 @@ export default function Room() {
             isVideoOff: !isCamOn,
             role: role as "signer" | "speaker",
             stream: localStream,
+            caption: captions["local"],
         };
 
         setParticipants([localParticipant, ...remotePeers]);
@@ -204,7 +264,7 @@ export default function Room() {
             local: localParticipant.name,
             remote: remotePeers.map((p) => p.name),
         });
-    }, [remoteStreams, name, isMicOn, isCamOn, role, localStream]);
+    }, [remoteStreams, name, isMicOn, isCamOn, role, localStream, captions]);
 
     const handleEndCall = () => {
         if (localStream) {
@@ -512,6 +572,34 @@ export default function Room() {
                                                 )}
                                             </div>
                                         </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsSimulatingCaptions(!isSimulatingCaptions);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-3 py-3 rounded-md hover:bg-muted transition-colors text-left"
+                                        >
+                                            <MessageSquareText className="h-5 w-5" />
+                                            <div className="flex-1">
+                                                <div className="font-medium text-sm">
+                                                    Simulate Captions
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {isSimulatingCaptions
+                                                        ? "On (dummy1, dummy2...)"
+                                                        : "Off"}
+                                                </div>
+                                            </div>
+                                            <div
+                                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${isSimulatingCaptions
+                                                    ? "bg-primary border-primary"
+                                                    : "border-muted-foreground"
+                                                    }`}
+                                            >
+                                                {isSimulatingCaptions && (
+                                                    <Check className="h-3 w-3 text-primary-foreground" />
+                                                )}
+                                            </div>
+                                        </button>
                                     </CardContent>
                                 </Card>
                             </>
@@ -527,6 +615,6 @@ export default function Room() {
                     </Button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
