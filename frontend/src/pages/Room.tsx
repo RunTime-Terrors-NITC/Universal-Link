@@ -16,6 +16,7 @@ import {
     X,
     Hand,
     MoreVertical,
+    Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -273,6 +274,12 @@ export default function Room() {
                             />
                             <span className="text-sm">
                                 {isConnected ? "Connected" : "Disconnected"}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted">
+                            <Users className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                                {participants.length}
                             </span>
                         </div>
                     </div>
