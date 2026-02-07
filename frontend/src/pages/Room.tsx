@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import ChatPanel from "@/components/ChatPanel";
 import VideoGrid from "@/components/VideoGrid";
 import { useWebRTC } from "@/hooks/useWebRTC";
+import { useSignLanguage } from "@/hooks/useSignLanguage";
 
 export default function Room() {
     const location = useLocation();
@@ -55,7 +56,7 @@ export default function Room() {
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isOptionsOpen, setIsOptionsOpen] = useState(false);
     const [isSignMode, setIsSignMode] = useState(false);
-    const [detectedGesture] = useState("");
+    // const [detectedGesture] = useState(""); // Replaced by hook
     const [sentenceBuffer, setSentenceBuffer] = useState("");
     const [captions, setCaptions] = useState<Record<string, string>>({});
     const [isSimulatingCaptions, setIsSimulatingCaptions] = useState(false);
@@ -106,6 +107,38 @@ export default function Room() {
         }
     });
 
+    // Sign Language Integration
+    const hiddenVideoRef = useRef<HTMLVideoElement>(null);
+    const { detectedGesture, confidence } = useSignLanguage({
+        videoRef: hiddenVideoRef,
+        isEnabled: isSignMode && !!localStream,
+    });
+
+    // Send detected gesture
+    useEffect(() => {
+        if (detectedGesture && confidence > 0.6) {
+            sendMessage(detectedGesture);
+
+            // Also show locally
+            setCaptions(prev => ({
+                ...prev,
+                local: detectedGesture
+            }));
+
+            // Clear local
+            setTimeout(() => {
+                setCaptions(prev => {
+                    if (prev.local === detectedGesture) {
+                        const newC = { ...prev };
+                        delete newC.local;
+                        return newC;
+                    }
+                    return prev;
+                });
+            }, 2000);
+        }
+    }, [detectedGesture, confidence, sendMessage]);
+
     // Redirect if missing required params
     useEffect(() => {
         if (!name || !roomId || !role) {
@@ -124,6 +157,10 @@ export default function Room() {
                     audio: true,
                 });
                 setLocalStream(stream);
+
+                if (hiddenVideoRef.current) {
+                    hiddenVideoRef.current.srcObject = stream;
+                }
             } catch (error) {
                 console.error("Error accessing media devices:", error);
             }
@@ -231,19 +268,56 @@ export default function Room() {
         };
     }, [isSimulatingCaptions, sendMessage]);
 
+    // Emit user state update when local mic/cam changes
+    useEffect(() => {
+        if (socket && roomId) {
+            socket.emit("user-state-update", {
+                roomId,
+                userId: socket.id,
+                isMicOn,
+                isCamOn,
+            });
+        }
+    }, [isMicOn, isCamOn, roomId]);
+
+    // Handle incoming user state updates
+    useEffect(() => {
+        const handleUserStateUpdate = ({ userId, isMicOn, isCamOn }: any) => {
+            console.log(`User state update: ${userId} mic:${isMicOn} cam:${isCamOn}`);
+            setParticipants((prev) =>
+                prev.map((p) => {
+                    if (p.id === userId) {
+                        return { ...p, isMuted: !isMicOn, isVideoOff: !isCamOn };
+                    }
+                    return p;
+                })
+            );
+        };
+
+        socket.on("user-state-update", handleUserStateUpdate);
+
+        return () => {
+            socket.off("user-state-update", handleUserStateUpdate);
+        };
+    }, []);
+
     // Update participants list with local and remote streams
     useEffect(() => {
         const remotePeers = Array.from(remoteStreams.entries()).map(
-            ([id, stream]) => ({
-                id,
-                name: `User ${id.substring(0, 4)}`,
-                isLocal: false,
-                isMuted: false,
-                isVideoOff: false,
-                role: "speaker" as const,
-                stream,
-                caption: captions[id],
-            }),
+            ([id, stream]) => {
+                // Find existing participant state if available to preserve mute/video status
+                const existing = participants.find(p => p.id === id);
+                return {
+                    id,
+                    name: `User ${id.substring(0, 4)}`,
+                    isLocal: false,
+                    isMuted: existing ? existing.isMuted : false, // Default to false if new
+                    isVideoOff: existing ? existing.isVideoOff : false, // Default to false if new
+                    role: "speaker" as const,
+                    stream,
+                    caption: captions[id],
+                };
+            }
         );
 
         const localParticipant = {
@@ -367,6 +441,15 @@ export default function Room() {
                     <VideoGrid
                         participants={participants}
                         localStream={localStream}
+                    />
+
+                    {/* Hidden video for KNN processing */}
+                    <video
+                        ref={hiddenVideoRef}
+                        className="absolute top-0 left-0 w-[640px] h-[480px] opacity-0 pointer-events-none -z-10"
+                        autoPlay
+                        playsInline
+                        muted
                     />
 
                     {/* Waiting State */}

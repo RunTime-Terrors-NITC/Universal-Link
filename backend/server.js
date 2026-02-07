@@ -62,6 +62,10 @@ function onConnected(socket) {
         console.log(`${socket.id} left room ${roomId}`);
     });
 
+    socket.on("user-state-update", ({ roomId, userId, isMicOn, isCamOn }) => {
+        socket.to(roomId).emit("user-state-update", { userId, isMicOn, isCamOn });
+    });
+
     socket.on("disconnect", () => {
         console.log("Socket Disconnected:", socket.id);
         // Notify all rooms this user was in
