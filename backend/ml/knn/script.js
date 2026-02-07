@@ -133,7 +133,7 @@ hands.onResults(results => {
 
 // ---------------- CAMERA ----------------
 let frameCount=0;
-const FrameSkip=30;
+const FrameSkip=10;
 
 const camera = new Camera(video, {
   onFrame: async () => {
