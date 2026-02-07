@@ -1,22 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Hand Sign Test</title>
-
-  <!-- Tensorflow -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-
-  <!-- Mediapipe -->
+  <title>Landmark Extractor</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
 </head>
-
 <body>
+  <input type="file" id="fileInput" multiple accept="image/*">
+  <pre id="output"></pre>
 
-<video id="video" autoplay></video>
-
-<script src="script.js"></script>
-
+  <script src="extract.js"></script>
 </body>
 </html>
