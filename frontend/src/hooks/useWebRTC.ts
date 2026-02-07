@@ -1,4 +1,3 @@
-import { CloudCog } from "lucide-react";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Socket } from "socket.io-client";
 
@@ -31,71 +30,80 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
     // Queue of peer IDs that joined before localStream was ready
     const pendingPeersRef = useRef<Set<string>>(new Set());
 
-    const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
+    const [remoteStreams, setRemoteStreams] = useState<
+        Map<string, MediaStream>
+    >(new Map());
 
-    const createPeerConnection = useCallback((peerId: string): RTCPeerConnection => {
-        console.log(`Creating peer connection for ${peerId}`);
+    const createPeerConnection = useCallback(
+        (peerId: string): RTCPeerConnection => {
+            console.log(`Creating peer connection for ${peerId}`);
 
-        const peerConnection = new RTCPeerConnection(ICE_SERVERS)
+            const peerConnection = new RTCPeerConnection(ICE_SERVERS);
 
-        if (localStream) {
-            localStream.getTracks().forEach((track) => {
-                peerConnection.addTrack(track, localStream)
-                console.log(`Added ${track.kind} track to peer ${peerId}`);
-            })
-        }
-
-        // Handle incoming tracks from remote peer (receive their audio/video)
-        peerConnection.ontrack = (event) => {
-            console.log(`Received ${event.track.kind} track from ${peerId}`);
-            const [remoteStream] = event.streams;
-
-            if (remoteStream) {
-                setRemoteStreams((prev) => {
-                    const newMap = new Map(prev);
-                    newMap.set(peerId, remoteStream);
-                    return newMap;
+            if (localStream) {
+                localStream.getTracks().forEach((track) => {
+                    peerConnection.addTrack(track, localStream);
+                    console.log(`Added ${track.kind} track to peer ${peerId}`);
                 });
+            }
 
-                // Update the peer's stream
-                const peer = peersRef.current.get(peerId);
-                if (peer) {
-                    peer.stream = remoteStream;
+            // Handle incoming tracks from remote peer (receive their audio/video)
+            peerConnection.ontrack = (event) => {
+                console.log(
+                    `Received ${event.track.kind} track from ${peerId}`,
+                );
+                const [remoteStream] = event.streams;
+
+                if (remoteStream) {
+                    setRemoteStreams((prev) => {
+                        const newMap = new Map(prev);
+                        newMap.set(peerId, remoteStream);
+                        return newMap;
+                    });
+
+                    // Update the peer's stream
+                    const peer = peersRef.current.get(peerId);
+                    if (peer) {
+                        peer.stream = remoteStream;
+                    }
                 }
-            }
-        };
+            };
 
-        // Handle ICE candidates (network path discovery)
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                console.log(`Sending ICE candidate to ${peerId}`);
-                socket.emit("ice-candidate", {
-                    candidate: event.candidate,
-                    to: peerId,
-                });
-            }
-        };
+            // Handle ICE candidates (network path discovery)
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log(`Sending ICE candidate to ${peerId}`);
+                    socket.emit("ice-candidate", {
+                        candidate: event.candidate,
+                        to: peerId,
+                    });
+                }
+            };
 
-        // Monitor connection state
-        peerConnection.onconnectionstatechange = () => {
-            console.log(`Connection state with ${peerId}: ${peerConnection.connectionState}`);
+            // Monitor connection state
+            peerConnection.onconnectionstatechange = () => {
+                console.log(
+                    `Connection state with ${peerId}: ${peerConnection.connectionState}`,
+                );
 
-            if (peerConnection.connectionState === "disconnected" ||
-                peerConnection.connectionState === "failed") {
-                removePeer(peerId);
-            }
-        };
+                if (
+                    peerConnection.connectionState === "disconnected" ||
+                    peerConnection.connectionState === "failed"
+                ) {
+                    removePeer(peerId);
+                }
+            };
 
-        // Store the peer connection
-        peersRef.current.set(peerId, {
-            id: peerId,
-            connection: peerConnection,
-        });
+            // Store the peer connection
+            peersRef.current.set(peerId, {
+                id: peerId,
+                connection: peerConnection,
+            });
 
-        return peerConnection;
-    },
-        [localStream, socket]
-    )
+            return peerConnection;
+        },
+        [localStream, socket],
+    );
 
     const createOffer = useCallback(
         async (peerId: string) => {
@@ -111,13 +119,13 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
                 socket.emit("offer", {
                     offer,
                     to: peerId,
-                    room: roomId
+                    room: roomId,
                 });
             } catch (error) {
                 console.error(`Error creating offer for ${peerId}:`, error);
             }
         },
-        [createPeerConnection, socket]
+        [createPeerConnection, socket],
     );
 
     const handleOffer = useCallback(
@@ -127,25 +135,27 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
                 const peerConnection = createPeerConnection(from);
 
                 // Set remote offer
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                await peerConnection.setRemoteDescription(
+                    new RTCSessionDescription(offer),
+                );
 
                 // Create answer
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
-                console.log(answer)
-                console.log(" offer : ", offer)
+                console.log(answer);
+                console.log(" offer : ", offer);
 
                 console.log(`Sending answer to ${from}`);
                 socket.emit("answer", {
                     answer,
                     to: from,
-                    room: roomId
+                    room: roomId,
                 });
             } catch (error) {
                 console.error(`Error handling offer from ${from}:`, error);
             }
         },
-        [createPeerConnection, socket]
+        [createPeerConnection, socket],
     );
 
     const handleAnswer = useCallback(
@@ -154,18 +164,18 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
                 console.log(`Received answer from ${from}`);
                 const peer = peersRef.current.get(from);
 
-                console.log(answer)
+                console.log(answer);
 
                 if (peer) {
                     await peer.connection.setRemoteDescription(
-                        new RTCSessionDescription(answer)
+                        new RTCSessionDescription(answer),
                     );
                 }
             } catch (error) {
                 console.error(`Error handling answer from ${from}:`, error);
             }
         },
-        []
+        [],
     );
 
     const handleIceCandidate = useCallback(
@@ -174,14 +184,19 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
                 const peer = peersRef.current.get(from);
 
                 if (peer && peer.connection.remoteDescription) {
-                    await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
+                    await peer.connection.addIceCandidate(
+                        new RTCIceCandidate(candidate),
+                    );
                     console.log(`Added ICE candidate from ${from}`);
                 }
             } catch (error) {
-                console.error(`Error adding ICE candidate from ${from}:`, error);
+                console.error(
+                    `Error adding ICE candidate from ${from}:`,
+                    error,
+                );
             }
         },
-        []
+        [],
     );
 
     const removePeer = useCallback((peerId: string) => {
@@ -200,7 +215,6 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
         }
     }, []);
 
-
     const handleUserJoined = useCallback(
         (userId: string) => {
             console.log(`User ${userId} joined the room`);
@@ -213,16 +227,15 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
             // As the existing user, create an offer for the new user
             createOffer(userId);
         },
-        [createOffer, localStream]
+        [createOffer, localStream],
     );
-
 
     const handleUserLeft = useCallback(
         (userId: string) => {
             console.log(`User ${userId} left the room`);
             removePeer(userId);
         },
-        [removePeer]
+        [removePeer],
     );
 
     useEffect(() => {
@@ -232,7 +245,7 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
         socket.on("offer", ({ offer, from }) => handleOffer(offer, from));
         socket.on("answer", ({ answer, from }) => handleAnswer(answer, from));
         socket.on("ice-candidate", ({ candidate, from }) =>
-            handleIceCandidate(candidate, from)
+            handleIceCandidate(candidate, from),
         );
         socket.on("user-joined", ({ userId }) => handleUserJoined(userId));
         socket.on("user-left", ({ userId }) => handleUserLeft(userId));
@@ -245,7 +258,15 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
             socket.off("user-joined");
             socket.off("user-left");
         };
-    }, [socket, roomId, handleOffer, handleAnswer, handleIceCandidate, handleUserJoined, handleUserLeft]);
+    }, [
+        socket,
+        roomId,
+        handleOffer,
+        handleAnswer,
+        handleIceCandidate,
+        handleUserJoined,
+        handleUserLeft,
+    ]);
 
     // Process pending peers and update existing connections when localStream becomes available
     useEffect(() => {
@@ -261,17 +282,21 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
         // Add tracks to any existing peer connections that don't have them
         peersRef.current.forEach((peer) => {
             const senders = peer.connection.getSenders();
-            const hasAudio = senders.some(s => s.track?.kind === 'audio');
-            const hasVideo = senders.some(s => s.track?.kind === 'video');
+            const hasAudio = senders.some((s) => s.track?.kind === "audio");
+            const hasVideo = senders.some((s) => s.track?.kind === "video");
 
             localStream.getTracks().forEach((track) => {
-                if (track.kind === 'audio' && !hasAudio) {
+                if (track.kind === "audio" && !hasAudio) {
                     peer.connection.addTrack(track, localStream);
-                    console.log(`Added audio track to existing peer ${peer.id}`);
+                    console.log(
+                        `Added audio track to existing peer ${peer.id}`,
+                    );
                 }
-                if (track.kind === 'video' && !hasVideo) {
+                if (track.kind === "video" && !hasVideo) {
                     peer.connection.addTrack(track, localStream);
-                    console.log(`Added video track to existing peer ${peer.id}`);
+                    console.log(
+                        `Added video track to existing peer ${peer.id}`,
+                    );
                 }
             });
         });
@@ -289,7 +314,6 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
     return {
         remoteStreams,
         createOffer, // Manually create offer if needed
-        removePeer,  // Manually remove peer if needed
+        removePeer, // Manually remove peer if needed
     };
-
 }

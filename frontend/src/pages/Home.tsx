@@ -1,15 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-    Hand,
-    Mic,
-    Video,
-    Sparkles,
-    Zap,
-    Shield,
-    Plus,
-    LogIn,
-} from "lucide-react";
+import { Hand, Video, Sparkles, Zap, Shield, Plus, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Card,
