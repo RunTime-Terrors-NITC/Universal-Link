@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import ChatPanel from "@/components/ChatPanel";
 import VideoGrid from "@/components/VideoGrid";
 
-const socket = io("http://localhost:4000");
+const socket = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:4000");
 
 export default function Room() {
     const location = useLocation();

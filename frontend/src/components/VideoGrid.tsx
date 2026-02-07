@@ -72,7 +72,7 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
     };
 
     return (
-        <Card className="relative overflow-hidden bg-muted/20 h-full group">
+        <Card className="relative py-0 overflow-hidden bg-muted/20 h-full group">
             {/* Video Element */}
             {!participant.isVideoOff && (participant.stream || localStream) ? (
                 <video
