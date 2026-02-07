@@ -31,6 +31,7 @@ import ChatPanel from "@/components/ChatPanel";
 import VideoGrid from "@/components/VideoGrid";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useSignLanguage } from "@/hooks/useSignLanguage";
+import useSpeechRecognition from "@/hooks/useSpeechRecognition";
 
 export default function Room() {
     const location = useLocation();
@@ -85,31 +86,17 @@ export default function Room() {
         onMessage: (peerId, message) => {
             try {
                 const data = JSON.parse(message);
+
                 if (data.type === "caption") {
                     setCaptions((prev) => ({
                         ...prev,
                         [peerId]: { confirmed: data.confirmed, forming: data.forming },
                     }));
 
-                    // Clear caption after a delay if both are empty (rare) or maybe just keep them until replaced?
-                    // YouTube captions differ: they stay for a bit then disappear.
-                    // If 'forming' is empty and 'confirmed' is set, it means a sentence just finished.
-                    // We can clear it after 5 seconds of no activity.
-                    // But managing timers per peer is complex.
-                    // Let's just set a timeout to clear *everything* for that peer if no update comes.
-                    // Actually, rely on updates. If they start a new sentence, 'confirmed' might still be the old one?
-                    // The hook `confirmedSentence` state persists until the *next* confirmation?
-                    // No, `setConfirmedSentence` is called on Enter. It stays there.
-                    // Ideally `confirmedSentence` should fade out.
-                    // Let's implement fade out in UI (VideoGrid) or just keep it simple: showing the last confirmed sentence is good context.
-
-                    // Allow simple clearing
+                    // Clear caption after a delay
                     setTimeout(() => {
                         setCaptions((prev) => {
-                            // Only clear if it hasn't changed
                             if (prev[peerId]?.confirmed === data.confirmed && prev[peerId]?.forming === data.forming) {
-                                // If it's old, maybe clear 'confirmed' but keep 'forming'?
-                                // If 'forming' hasn't changed in 5s, maybe clear it too?
                                 const newCaptions = { ...prev };
                                 delete newCaptions[peerId];
                                 return newCaptions;
@@ -117,13 +104,23 @@ export default function Room() {
                             return prev;
                         });
                     }, 5000);
+                } else if (data.type === "tts") {
+                    if (isTtsOn) {
+                        // Cancel any ongoing speech to avoid queue buildup? 
+                        // Or maybe let them queue? Queueing is safer for full sentences.
+                        const utterance = new SpeechSynthesisUtterance(data.text);
+                        window.speechSynthesis.speak(utterance);
+                    }
                 }
             } catch (e) {
-                // Fallback for plain text messages if any (backward compatibility or chat)
                 console.log("Received non-JSON message or chat:", message);
             }
         }
     });
+
+
+
+    // ... inside component ...
 
     // Sign Language Integration
     const hiddenVideoRef = useRef<HTMLVideoElement>(null);
@@ -132,15 +129,85 @@ export default function Room() {
         isEnabled: isSignMode && !!localStream,
     });
 
-    // Send captions
+    // Speech Recognition Integration
+    const { currentTranscript } = useSpeechRecognition({
+        isEnabled: !isSignMode && isMicOn && !!localStream,
+        onResult: (transcript, isFinal) => {
+            // If final, it's a confirmed sentence chunk
+            if (isFinal) {
+                // Send as confirmed
+                const payload = JSON.stringify({
+                    type: 'caption',
+                    confirmed: transcript,
+                    forming: ""
+                });
+                sendMessage(payload);
+
+                // Update local display
+                setCaptions(prev => ({
+                    ...prev,
+                    local: { confirmed: transcript, forming: "" }
+                }));
+
+                // Clear local after delay
+                setTimeout(() => {
+                    setCaptions(prev => {
+                        if (prev.local?.confirmed === transcript) {
+                            const newC = { ...prev };
+                            delete newC.local;
+                            return newC;
+                        }
+                        return prev;
+                    });
+                }, 5000);
+
+            } else {
+                // Send as forming
+                const payload = JSON.stringify({
+                    type: 'caption',
+                    confirmed: "", // or keep previous? No, speech chunks are usually standalone or we clear confirmed?
+                    // YouTube keeps confirmed line line until new one replaces it? 
+                    // Actually, if I send `confirmed: ""` it might clear the top line. 
+                    // Let's just send forming. Receivers blindly overwrite.
+                    // If I want to keep confirmed visible while forming new, I need to track last confirmed?
+                    // Let's just send what we have.
+                    forming: transcript
+                });
+                sendMessage(payload);
+
+                // Update local display
+                setCaptions(prev => ({
+                    ...prev,
+                    local: { ...prev.local, forming: transcript, confirmed: prev.local?.confirmed || "" }
+                }));
+            }
+        }
+    });
+
+    // Send captions & TTS (Sign Language)
     useEffect(() => {
+        if (!isSignMode) return; // Only run this effect in sign mode
         if (confirmedSentence || currentSentence) {
+            // ... existing logic ...
             const payload = JSON.stringify({
                 type: 'caption',
                 confirmed: confirmedSentence,
                 forming: currentSentence
             });
             sendMessage(payload);
+
+            // Send TTS if confirmed
+            if (confirmedSentence && !currentSentence) {
+                // Wait, usage: confirmed is set, current is cleared to "".
+                // So confirmedSentence is "Hello world." and currentSentence is "".
+                const ttsPayload = JSON.stringify({ type: 'tts', text: confirmedSentence });
+                sendMessage(ttsPayload);
+
+                // Play locally too? Maybe not, usually implementation is only remote?
+                // User said "use webrtc to do tts", implies sending it.
+                // But normally you want to hear what you said too? 
+                // Let's stick to remote for now, as local user knows what they signed.
+            }
 
             // Update local display
             setCaptions(prev => ({
