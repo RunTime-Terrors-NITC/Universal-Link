@@ -265,7 +265,7 @@ export function useSignLanguage({ videoRef, canvasRef, isEnabled, isSignMode }: 
     const WORD_MAP: { [key: string]: string } = {
         "A": "Am",
         "B": "Bad",
-        "E": "Namaste",
+        "E": "Assalamualaikum",
         "G": "Go",
         "H": "Hospital",
         "I": "I",
