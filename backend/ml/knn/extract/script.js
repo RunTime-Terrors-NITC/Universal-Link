@@ -93,6 +93,12 @@ processBtn.onclick = async () => {
 // ---------------- COPY TO CLIPBOARD ----------------
 copyBtn.onclick = async () => {
   const textToCopy = output.innerText;
+  if (!navigator.clipboard) {
+    console.error("Clipboard API not available. Serve the page over HTTPS or localhost.");
+    copyFeedback.innerText = "Clipboard not supported. Use HTTPS or localhost.";
+    copyFeedback.style.color = "red";
+    return;
+  }
   try {
     await navigator.clipboard.writeText(textToCopy);
     copyFeedback.innerText = "✓ Copied!";
