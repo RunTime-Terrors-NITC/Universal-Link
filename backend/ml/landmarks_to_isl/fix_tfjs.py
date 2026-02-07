@@ -40,7 +40,7 @@ try:
             content = content.replace(old, new)
             modified = True
             print(f"  Replaced '{old}' with '{new}'")
-    
+    git 
     if modified:
         # Write the fixed content
         with open(read_weights_file, 'w') as f:
