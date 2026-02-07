@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <title>LAN Video Call (Manual Signaling)</title>
+    <style>
+      :root {
+        --bg-color: #121212;
+        --card-bg: #1e1e1e;
+        --text-color: #e0e0e0;
+        --accent-color: #bb86fc;
+        --success-color: #03dac6;
+        --error-color: #cf6679;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+      }
+
+      h1 {
+        color: var(--accent-color);
+        margin-bottom: 20px;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 1200px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      @media (min-width: 768px) {
+        .container {
+          grid-template-columns: 2fr 1fr;
+        }
+      }
+
+      /* Video Section */
+      .video-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 15px;
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      }
+
+      @media (min-width: 768px) {
+        .video-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      .video-wrapper {
+        position: relative;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        aspect-ratio: 16/9;
+      }
+
+      video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform: scaleX(-1);
+        /* Mirror local video */
+      }
+
+      #remoteVideo {
+        transform: none;
+        /* Don't mirror remote */
+      }
+
+      .label {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+      }
+
+      /* Controls Section */
+      .controls {
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .step {
+        border-left: 3px solid var(--accent-color);
+        padding-left: 15px;
+        margin-bottom: 20px;
+      }
+
+      .step h3 {
+        margin: 0 0 10px 0;
+        font-size: 1.1rem;
+      }
+
+      textarea {
+        width: 100%;
+        height: 80px;
+        background: #2d2d2d;
+        border: 1px solid #444;
+        color: #fff;
+        padding: 8px;
+        border-radius: 6px;
+        resize: vertical;
+        font-family: monospace;
+        box-sizing: border-box;
+        /* Important for width: 100% */
+      }
+
+      button {
+        background-color: var(--accent-color);
+        color: #000;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background 0.2s;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      button:hover {
+        background-color: #a370db;
+      }
+
+      button:disabled {
+        background-color: #555;
+        cursor: not-allowed;
+      }
+
+      .btn-success {
+        background-color: var(--success-color);
+      }
+
+      .btn-success:hover {
+        background-color: #02b3a2;
+      }
+
+      #status-msg {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 6px;
+        text-align: center;
+        font-weight: bold;
+        display: none;
+      }
+
+      .status-waiting {
+        background: #333;
+        color: #aaa;
+      }
+
+      .status-ready {
+        background: #1a4d1a;
+        color: #8f8;
+      }
+
+      .status-error {
+        background: #4d1a1a;
+        color: #f88;
+      }
+
+      .gesture-display {
+        /* gesture display container */
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      }
+
+      .gesture-display h3 {
+        margin: 0 0 10px 0;
+        color: var(--accent-color);
+        font-size: 1rem;
+      }
+
+      .gesture-messages {
+        background: #0a0a0a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 10px;
+        max-height: 200px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 0.85rem;
+      }
+
+      .gesture-message {
+        padding: 6px 10px;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        border-left: 3px solid transparent;
+      }
+
+      .gesture-sent {
+        background: rgba(187, 134, 252, 0.1);
+        border-left-color: var(--accent-color);
+        text-align: right;
+      }
+
+      .gesture-received {
+        background: rgba(3, 218, 198, 0.1);
+        border-left-color: var(--success-color);
+      }
+
+      .gesture-time {
+        font-size: 0.7rem;
+        color: #666;
+        margin-left: 8px;
+      }
+
+      .debug-log {
+        margin-top: 15px;
+        padding: 10px;
+        background: #000;
+        border: 1px solid #333;
+        border-radius: 6px;
+        max-height: 150px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 0.75rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>LAN Video Call</h1>
+
+    <div class="container">
+      <!-- Video Area -->
+      <div class="video-grid">
+        <div class="video-wrapper">
+          <video id="myvideo" autoplay playsinline muted></video>
+          <canvas id="canvas"></canvas>
+          <div class="label">You</div>
+        </div>
+        <div class="video-wrapper">
+          <video id="remoteVideo" autoplay playsinline></video>
+          <div class="label">Remote</div>
+        </div>
+      </div>
+
+      <div class="gesture-display">
+        <h3>Gesture Communications</h3>
+        <div class="gesture-messages" id="gesture-messages">
+          <div style="text-align: center; color: #666; padding: 20px">
+            No gestures yet. Start the call and make hand gestures!
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Controls -->
+      <div class="controls">
+        <div id="status-msg"></div>
+
+        <div class="step">
+          <h3>1. Start</h3>
+          <p style="font-size: 0.9rem; color: #aaa">
+            Allow camera/mic access to begin.
+          </p>
+          <button id="initBtn" onclick="initApp()">Initialize Camera</button>
+        </div>
+
+        <div class="step" id="step-create" style="display: none">
+          <h3>2. Create Connection</h3>
+          <p style="font-size: 0.9rem; color: #aaa">
+            Are you starting the call or joining?
+          </p>
+          <div style="display: flex; gap: 10px">
+            <button onclick="createOffer()">Start Call (Offer)</button>
+            <!-- Join button is implicit; if they have code, they paste it below -->
+          </div>
+        </div>
+
+        <div class="step" id="step-data" style="display: none">
+          <h3>3. Exchange Data</h3>
+
+          <p>
+            <strong>Your Code:</strong>
+            <span style="font-size: 0.8rem; color: #aaa"
+              >(Send this to your friend)</span
+            >
+          </p>
+          <textarea
+            id="localSdp"
+            readonly
+            placeholder="Generating..."
+          ></textarea>
+          <button
+            onclick="copyToClipboard('localSdp')"
+            style="margin-top: 5px; font-size: 0.8rem; padding: 5px"
+          >
+            Copy
+          </button>
+
+          <hr style="border-color: #444; margin: 20px 0" />
+
+          <p>
+            <strong>Friend's Code:</strong>
+            <span style="font-size: 0.8rem; color: #aaa"
+              >(Paste their code here)</span
+            >
+          </p>
+          <textarea
+            id="remoteSdp"
+            placeholder="Paste the code you received..."
+          ></textarea>
+          <button
+            id="answerBtn"
+            onclick="handleRemoteSdp()"
+            class="btn-success"
+            style="margin-top: 10px"
+          >
+            Process Code
+          </button>
+        </div>
+      </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="./index.js"></script>
+  </body>
+</html>
