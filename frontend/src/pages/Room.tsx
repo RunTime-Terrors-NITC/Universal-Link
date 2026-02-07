@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 import {
     Mic,
     MicOff,
@@ -26,7 +26,6 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import ChatPanel from "@/components/ChatPanel";
 import VideoGrid from "@/components/VideoGrid";
 import { useWebRTC } from "@/hooks/useWebRTC";
@@ -38,15 +37,8 @@ export default function Room() {
     const navigate = useNavigate();
     const { name, roomId, role } = location.state || {};
 
-    // Socket ref to prevent recreation on re-renders and shared state between tabs
-    const socketRef = useRef<Socket | null>(null);
-
-    // Initialize socket once
-    if (!socketRef.current) {
-        socketRef.current = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:4000");
-    }
-
-    const socket = socketRef.current;
+    // Initialize socket once using useState lazy initializer to avoid ref access during render
+    const [socket] = useState(() => io(import.meta.env.VITE_BACKEND_URL || "http://localhost:4000"));
 
     const [isMicOn, setIsMicOn] = useState(true);
     const [isCamOn, setIsCamOn] = useState(true);
@@ -68,16 +60,8 @@ export default function Room() {
     >([]);
 
     const [localStream, setLocalStream] = useState<MediaStream>();
-    const [participants, setParticipants] = useState([
-        {
-            id: "1",
-            name: name || "You",
-            isLocal: true,
-            isMuted: !isMicOn,
-            isVideoOff: !isCamOn,
-            role: role as "signer" | "speaker",
-        },
-    ]);
+    // userStates stores the mute/video status of remote users
+    const [userStates, setUserStates] = useState<Record<string, { isMuted: boolean, isVideoOff: boolean }>>({});
 
     const { remoteStreams, sendMessage } = useWebRTC({
         roomId: roomId || "",
@@ -106,31 +90,64 @@ export default function Room() {
                     }, 5000);
                 } else if (data.type === "tts") {
                     if (isTtsOn) {
-                        // Cancel any ongoing speech to avoid queue buildup? 
-                        // Or maybe let them queue? Queueing is safer for full sentences.
                         const utterance = new SpeechSynthesisUtterance(data.text);
                         window.speechSynthesis.speak(utterance);
                     }
                 }
-            } catch (e) {
+            } catch {
                 console.log("Received non-JSON message or chat:", message);
             }
         }
     });
 
+    // Derive participants list for rendering
+    // This avoids "setting state during render" and "infinite dependency loops"
+    const participants = [
+        {
+            id: "local",
+            name: name || "You",
+            isLocal: true,
+            isMuted: !isMicOn,
+            isVideoOff: !isCamOn,
+            role: role as "signer" | "speaker",
+            stream: localStream,
+            caption: captions["local"],
+        },
+        ...Array.from(remoteStreams.entries()).map(([id, stream]) => {
+            const state = userStates[id] || { isMuted: false, isVideoOff: false };
+            return {
+                id,
+                name: `User ${id.substring(0, 4)}`,
+                isLocal: false,
+                isMuted: state.isMuted,
+                isVideoOff: state.isVideoOff,
+                role: "speaker" as const, // Remote users default to speaker for now
+                stream,
+                caption: captions[id],
+            };
+        })
+    ];
 
 
     // ... inside component ...
 
     // Sign Language Integration
     const hiddenVideoRef = useRef<HTMLVideoElement>(null);
-    const { detectedGesture, confidence, currentSentence, confirmedSentence } = useSignLanguage({
+    const {
+        detectedGesture,
+        confidence,
+        currentSentence,
+        confirmedSentence,
+        confirmSentence,
+        clearSentence
+    } = useSignLanguage({
         videoRef: hiddenVideoRef,
         isEnabled: isSignMode && !!localStream,
+        isSignMode
     });
 
     // Speech Recognition Integration
-    const { currentTranscript } = useSpeechRecognition({
+    useSpeechRecognition({
         isEnabled: !isSignMode && isMicOn && !!localStream,
         onResult: (transcript, isFinal) => {
             // If final, it's a confirmed sentence chunk
@@ -210,6 +227,7 @@ export default function Room() {
             }
 
             // Update local display
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setCaptions(prev => ({
                 ...prev,
                 local: { confirmed: confirmedSentence, forming: currentSentence }
@@ -227,7 +245,7 @@ export default function Room() {
                 });
             }, 5000);
         }
-    }, [confirmedSentence, currentSentence, sendMessage]);
+    }, [confirmedSentence, currentSentence, sendMessage, isSignMode]);
 
     // Redirect if missing required params
     useEffect(() => {
@@ -298,7 +316,7 @@ export default function Room() {
                 socket.emit("leave-room", roomId);
             }
         };
-    }, [roomId]);
+    }, [roomId, socket]);
 
     // Update local participant when mic/cam state changes
     useEffect(() => {
@@ -335,20 +353,17 @@ export default function Room() {
                 isCamOn,
             });
         }
-    }, [isMicOn, isCamOn, roomId]);
+    }, [isMicOn, isCamOn, roomId, socket]);
 
     // Handle incoming user state updates
     useEffect(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const handleUserStateUpdate = ({ userId, isMicOn, isCamOn }: any) => {
             console.log(`User state update: ${userId} mic:${isMicOn} cam:${isCamOn}`);
-            setParticipants((prev) =>
-                prev.map((p) => {
-                    if (p.id === userId) {
-                        return { ...p, isMuted: !isMicOn, isVideoOff: !isCamOn };
-                    }
-                    return p;
-                })
-            );
+            setUserStates((prev) => ({
+                ...prev,
+                [userId]: { isMuted: !isMicOn, isVideoOff: !isCamOn }
+            }));
         };
 
         socket.on("user-state-update", handleUserStateUpdate);
@@ -356,46 +371,20 @@ export default function Room() {
         return () => {
             socket.off("user-state-update", handleUserStateUpdate);
         };
-    }, []);
+    }, [socket]); // Added missing dependency 'participants'? NO, adding 'participants' usually causes infinite loop.
+    // I need to be careful with 'participants' dependency.
+    // 'participants' is state. Updating state based on state in effect causes loop.
+    // The logic is:
+    /*
+        const existing = participants.find(p => p.id === id);
+    */
+    // This reads 'participants'.
+    // Then it calls 'setParticipants'.
+    // This WILL cause infinite loop if I add 'participants' to dependency.
+    // I should use functional update for setParticipants if possible, OR use a ref for participants if I only need it for lookup.
+    // OR, I can suppress the warning if I am sure it's safe (it's not safe here).
 
-    // Update participants list with local and remote streams
-    useEffect(() => {
-        const remotePeers = Array.from(remoteStreams.entries()).map(
-            ([id, stream]) => {
-                // Find existing participant state if available to preserve mute/video status
-                const existing = participants.find(p => p.id === id);
-                return {
-                    id,
-                    name: `User ${id.substring(0, 4)}`,
-                    isLocal: false,
-                    isMuted: existing ? existing.isMuted : false, // Default to false if new
-                    isVideoOff: existing ? existing.isVideoOff : false, // Default to false if new
-                    role: "speaker" as const,
-                    stream,
-                    caption: captions[id],
-                };
-            }
-        );
-
-        const localParticipant = {
-            id: "local",
-            name: name || "You",
-            isLocal: true,
-            isMuted: !isMicOn,
-            isVideoOff: !isCamOn,
-            role: role as "signer" | "speaker",
-            stream: localStream,
-            caption: captions["local"],
-        };
-
-        setParticipants([localParticipant, ...remotePeers]);
-
-        /* console.log("Participants updated:", {
-            total: 1 + remotePeers.length,
-            local: localParticipant.name,
-            remote: remotePeers.map((p) => p.name),
-        }); */
-    }, [remoteStreams, name, isMicOn, isCamOn, role, localStream, captions]);
+    // Better approach:
 
     const handleEndCall = () => {
         if (localStream) {
