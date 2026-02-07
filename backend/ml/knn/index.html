@@ -1,14 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Landmark Extractor</title>
+  <meta charset="UTF-8" />
+  <title>KNN Hand Gesture Test</title>
+
+  <!-- MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <style>
+    body { margin: 0; background: #111; }
+    video { transform: scaleX(-1); }
+  </style>
 </head>
 <body>
-  <input type="file" id="fileInput" multiple accept="image/*">
-  <pre id="output"></pre>
+  <video id="video" autoplay playsinline></video>
 
-  <script src="extract.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
