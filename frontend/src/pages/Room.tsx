@@ -17,7 +17,6 @@ import {
     Hand,
     MoreVertical,
     Users,
-    MessageSquareText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,10 +55,8 @@ export default function Room() {
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isOptionsOpen, setIsOptionsOpen] = useState(false);
     const [isSignMode, setIsSignMode] = useState(false);
-    // const [detectedGesture] = useState(""); // Replaced by hook
     const [sentenceBuffer, setSentenceBuffer] = useState("");
     const [captions, setCaptions] = useState<Record<string, string>>({});
-    const [isSimulatingCaptions, setIsSimulatingCaptions] = useState(false);
     const [messages, setMessages] = useState<
         Array<{
             id: string;
@@ -228,45 +225,12 @@ export default function Room() {
             const videoTrack = localStream.getVideoTracks()[0];
             if (videoTrack) {
                 videoTrack.enabled = isCamOn;
+                console.log(`Video track ${isCamOn ? 'enabled' : 'disabled'}`);
             }
         }
     }, [isCamOn, localStream]);
 
-    useEffect(() => {
-        let interval: any;
 
-        if (isSimulatingCaptions) {
-            let count = 0;
-            interval = setInterval(() => {
-                count++;
-                const dummyText = `dummy${count}`;
-                sendMessage(dummyText);
-
-                // Also show it locally
-                setCaptions((prev) => ({
-                    ...prev,
-                    local: dummyText,
-                }));
-
-                // Clear local caption after 3s
-                setTimeout(() => {
-                    setCaptions((prev) => {
-                        if (prev.local === dummyText) {
-                            const newCaptions = { ...prev };
-                            delete newCaptions.local;
-                            return newCaptions;
-                        }
-                        return prev;
-                    });
-                }, 3000);
-
-            }, 1000);
-        }
-
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [isSimulatingCaptions, sendMessage]);
 
     // Emit user state update when local mic/cam changes
     useEffect(() => {
@@ -419,12 +383,12 @@ export default function Room() {
                     </div>
                     <div className="flex items-center gap-3">
                         <div
-                            className={`px-3 py-1 rounded-full text-sm font-medium ${role === "signer"
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${isSignMode
                                 ? "bg-green-500/10 text-green-500"
                                 : "bg-blue-500/10 text-blue-500"
                                 }`}
                         >
-                            {role === "signer" ? "👋 Signer" : "🎤 Speaker"}{" "}
+                            {isSignMode ? "👋 Sign" : "🎤 Speaker"}{" "}
                             Mode
                         </div>
                         <Button size="sm" variant="outline">
@@ -552,10 +516,18 @@ export default function Room() {
                         onClick={() => setIsMicOn(!isMicOn)}
                         className="h-12 w-12 rounded-full p-0"
                     >
-                        {isMicOn ? (
-                            <Mic className="h-5 w-5" />
+                        {isSignMode ? (
+                            isMicOn ? (
+                                <Hand className="h-5 w-5" />
+                            ) : (
+                                <MicOff className="h-5 w-5" />
+                            )
                         ) : (
-                            <MicOff className="h-5 w-5" />
+                            isMicOn ? (
+                                <Mic className="h-5 w-5" />
+                            ) : (
+                                <MicOff className="h-5 w-5" />
+                            )
                         )}
                     </Button>
                     <Button
@@ -655,34 +627,7 @@ export default function Room() {
                                                 )}
                                             </div>
                                         </button>
-                                        <button
-                                            onClick={() => {
-                                                setIsSimulatingCaptions(!isSimulatingCaptions);
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3 py-3 rounded-md hover:bg-muted transition-colors text-left"
-                                        >
-                                            <MessageSquareText className="h-5 w-5" />
-                                            <div className="flex-1">
-                                                <div className="font-medium text-sm">
-                                                    Simulate Captions
-                                                </div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    {isSimulatingCaptions
-                                                        ? "On (dummy1, dummy2...)"
-                                                        : "Off"}
-                                                </div>
-                                            </div>
-                                            <div
-                                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${isSimulatingCaptions
-                                                    ? "bg-primary border-primary"
-                                                    : "border-muted-foreground"
-                                                    }`}
-                                            >
-                                                {isSimulatingCaptions && (
-                                                    <Check className="h-3 w-3 text-primary-foreground" />
-                                                )}
-                                            </div>
-                                        </button>
+
                                     </CardContent>
                                 </Card>
                             </>

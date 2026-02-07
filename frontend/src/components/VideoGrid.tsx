@@ -77,24 +77,21 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
             .slice(0, 2);
     };
 
-    // Determine if we should show video
-    const hasStream =
-        participant.stream || (participant.isLocal && localStream);
-    const shouldShowVideo = !participant.isVideoOff && hasStream;
+
 
     return (
         <Card className="relative py-0 overflow-hidden bg-muted/20 h-full group">
-            {/* Video Element */}
-            {shouldShowVideo ? (
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted={participant.isLocal}
-                    className={`w-full h-full object-cover ${participant.isLocal ? "scale-x-[-1]" : ""}`}
-                />
-            ) : (
-                // Placeholder when video is off
+            {/* Video Element - Always rendered but hidden when needed */}
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted={participant.isLocal}
+                className={`w-full h-full object-cover ${participant.isLocal ? "scale-x-[-1]" : ""} ${participant.isVideoOff ? "hidden" : ""}`}
+            />
+
+            {/* Placeholder when video is off */}
+            {participant.isVideoOff && (
                 <div className="w-full h-full flex items-center justify-center bg-muted/40">
                     <Avatar className="h-20 w-20">
                         <AvatarFallback className="text-2xl">
