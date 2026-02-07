@@ -132,8 +132,14 @@ hands.onResults(results => {
 
 
 // ---------------- CAMERA ----------------
+let frameCount=0;
+const FrameSkip=30;
+
 const camera = new Camera(video, {
   onFrame: async () => {
+    frameCount++;
+    if(frameCount%FrameSkip!==0) return;
+    if(frameCount>1000000) frameCount=0;
     await hands.send({ image: video });
   },
   width: 640,
