@@ -16,15 +16,17 @@ interface Peer {
     id: string;
     connection: RTCPeerConnection;
     stream?: MediaStream;
+    dataChannel?: RTCDataChannel;
 }
 
 interface UseWebRTCProps {
     roomId: string;
     socket: Socket;
     localStream: MediaStream | undefined;
+    onMessage?: (peerId: string, message: string) => void;
 }
 
-export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
+export function useWebRTC({ roomId, socket, localStream, onMessage }: UseWebRTCProps) {
     const peersRef = useRef<Map<string, Peer>>(new Map());
     // store all peer connection in a ref;
 
@@ -44,6 +46,13 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
                 console.log(`Added ${track.kind} track to peer ${peerId}`);
             })
         }
+
+        // Handle incoming data channels
+        peerConnection.ondatachannel = (event) => {
+            const dataChannel = event.channel;
+            console.log(`Received data channel "${dataChannel.label}" from ${peerId}`);
+            setupDataChannel(dataChannel, peerId);
+        };
 
         // Handle incoming tracks from remote peer (receive their audio/video)
         peerConnection.ontrack = (event) => {
@@ -97,10 +106,46 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
         [localStream, socket]
     )
 
+
+    const setupDataChannel = useCallback((channel: RTCDataChannel, peerId: string) => {
+        channel.onopen = () => {
+            console.log(`Data channel "${channel.label}" open with ${peerId}`);
+            const peer = peersRef.current.get(peerId);
+            if (peer) {
+                peer.dataChannel = channel;
+            }
+        };
+
+        channel.onmessage = (event) => {
+            console.log(`Received message from ${peerId}:`, event.data);
+            if (onMessage) {
+                onMessage(peerId, event.data);
+            }
+        };
+
+        // Store the data channel immediately as well
+        const peer = peersRef.current.get(peerId);
+        if (peer) {
+            peer.dataChannel = channel;
+        }
+    }, [onMessage]);
+
     const createOffer = useCallback(
         async (peerId: string) => {
             try {
                 const peerConnection = createPeerConnection(peerId);
+
+                // Create data channel
+                const dataChannel = peerConnection.createDataChannel("captions");
+                setupDataChannel(dataChannel, peerId);
+
+                const peer = peersRef.current.get(peerId);
+                if (peer) {
+                    peer.dataChannel = dataChannel;
+                }
+
+                // Store data channel in peer map (we need to update the interface first)
+                // For now, let's update Peer interface at the top of the file
 
                 // Create an offer (SDP - Session Description Protocol)
                 const offer = await peerConnection.createOffer();
@@ -286,10 +331,28 @@ export function useWebRTC({ roomId, socket, localStream }: UseWebRTCProps) {
         };
     }, []);
 
+    const sendMessage = useCallback((message: string) => {
+        peersRef.current.forEach((peer) => {
+            if (peer.dataChannel && peer.dataChannel.readyState === "open") {
+                peer.dataChannel.send(message);
+            }
+        });
+    }, []);
+
+    // Update setupDataChannel to store the channel
+    // We need to move setupDataChannel definition or use a ref if we want to update the peer map inside it properly without stale closures? 
+    // Actually peersRef is a ref, so it's fine.
+
+    // Let's refine setupDataChannel to store the channel in the peer object
+    // I already added the logic in the replacement above but let's make sure it's correct.
+    // The previous replacement for setupDataChannel didn't explicitly store it in the peer object. 
+    // I will add another replacement to fix that.
+
     return {
         remoteStreams,
         createOffer, // Manually create offer if needed
         removePeer,  // Manually remove peer if needed
+        sendMessage,
     };
 
 }
