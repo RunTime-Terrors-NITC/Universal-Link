@@ -160,27 +160,112 @@ export function useSignLanguage({ videoRef, isEnabled }: UseSignLanguageProps) {
         [euclidean]
     );
 
+    const [currentSentence, setCurrentSentence] = useState<string>("");
+    const [confirmedSentence, setConfirmedSentence] = useState<string>("");
+    const detectionBufferRef = useRef<string[]>([]);
+    const lastProcessedGestureRef = useRef<string>("");
+    const activeGestureRef = useRef<string>("");
+    const lastConfidenceRef = useRef<number>(0);
+
+    // Helper: Find most frequent string in array
+    const getMode = (arr: string[]) => {
+        if (arr.length === 0) return "";
+        const counts: Record<string, number> = {};
+        let maxCount = 0;
+        let mode = "";
+
+        for (const item of arr) {
+            counts[item] = (counts[item] || 0) + 1;
+            if (counts[item] > maxCount) {
+                maxCount = counts[item];
+                mode = item;
+            }
+        }
+        return mode;
+    };
+
     const onResults = useCallback(
         (results: Results) => {
-            // console.log("MediaPipe Results received. Landmarks:", results.multiHandLandmarks?.length);
+            let label = "";
+            let dist = 0;
+
             if (
-                !results.multiHandLandmarks ||
-                results.multiHandLandmarks.length === 0
+                results.multiHandLandmarks &&
+                results.multiHandLandmarks.length > 0
             ) {
-                // setDetectedGesture("");
-                return;
+                const landmarks = results.multiHandLandmarks[0];
+                const vector = normalizeLandmarks(landmarks as Landmark[]);
+                const prediction = classify(vector);
+                if (prediction) {
+                    label = prediction.label;
+                    dist = prediction.dist;
+                }
             }
 
-            const landmarks = results.multiHandLandmarks[0];
-            const vector = normalizeLandmarks(landmarks as Landmark[]);
-            const prediction = classify(vector);
+            // Buffer Logic
+            const buffer = detectionBufferRef.current;
+            buffer.push(label);
 
-            // console.log("Prediction:", prediction);
+            // Keep buffer at size 20 (approx 0.6-1 sec of frames)
+            if (buffer.length > 20) {
+                buffer.shift();
+            }
 
-            if (prediction) {
-                // Simple smoothing or thresholding could be added here
-                setDetectedGesture(prediction.label);
-                setConfidence(prediction.dist);
+            // Process if buffer is full enough
+            if (buffer.length >= 20) {
+                const dominantGesture = getMode(buffer);
+
+                // Count occurrences of dominant gesture
+                const count = buffer.filter(g => g === dominantGesture).length;
+                const threshold = 12; // 60% of 20 frames
+
+                if (count >= threshold) {
+                    // Update exposed state only if dominant gesture changes to avoid rapid re-renders
+                    if (dominantGesture !== activeGestureRef.current) {
+                        activeGestureRef.current = dominantGesture;
+                        setDetectedGesture(dominantGesture);
+                    }
+
+                    // Update confidence
+                    if (Math.abs(dist - lastConfidenceRef.current) > 0.1) {
+                        lastConfidenceRef.current = dist;
+                        setConfidence(dist);
+                    }
+
+                    // Sentence Construction Logic
+                    // We only act if the stable gesture changes
+                    if (dominantGesture !== lastProcessedGestureRef.current) {
+                        console.log(`[useSignLanguage] Stable gesture changed: "${lastProcessedGestureRef.current}" -> "${dominantGesture}"`);
+                        lastProcessedGestureRef.current = dominantGesture;
+
+                        if (dominantGesture && dominantGesture !== "") {
+                            if (dominantGesture === "Enter" || dominantGesture === "OK") {
+                                console.log("[useSignLanguage] Confirmation detected - confirming sentence.");
+                                // Commit sentence
+                                setCurrentSentence((prev) => {
+                                    setConfirmedSentence(prev.trim() + ".");
+                                    return "";
+                                });
+                            } else {
+                                // Append word
+                                setCurrentSentence((prev) => {
+                                    // Don't append if it's the same as the last word in the sentence (to avoid "Hello Hello")
+                                    // UNLESS the user explicitly made a different gesture in between (which they did, because lastProcessed changed)
+                                    // But we should double check the last word of the sentence just in case.
+                                    const words = prev.trim().split(" ");
+                                    const lastWord = words[words.length - 1];
+
+                                    if (lastWord !== dominantGesture) {
+                                        const newSentence = (prev + " " + dominantGesture).trim();
+                                        console.log("[useSignLanguage] Sentence updated:", newSentence);
+                                        return newSentence;
+                                    }
+                                    return prev;
+                                });
+                            }
+                        }
+                    }
+                }
             }
         },
         [classify, normalizeLandmarks]
@@ -189,35 +274,26 @@ export function useSignLanguage({ videoRef, isEnabled }: UseSignLanguageProps) {
     // Processing Loop
     useEffect(() => {
         let active = true;
-        // console.log("useSignLanguage effect triggered. isEnabled:", isEnabled);
 
         const processVideo = async () => {
             if (!isEnabled || !videoRef.current || !handsRef.current) {
-                // console.log("Skipping processVideo", { isEnabled, video: !!videoRef.current, hands: !!handsRef.current });
                 return;
             }
 
             const video = videoRef.current;
 
             if (video.readyState < 2) {
-                // Video not ready
-                // console.log("Video not ready, waiting...");
                 frameIdRef.current = requestAnimationFrame(processVideo);
                 return;
             }
 
-            // Only process if time advanced (not paused)
-            // Only process if time advanced (not paused)
             if (video.currentTime !== lastVideoTimeRef.current) {
                 lastVideoTimeRef.current = video.currentTime;
-                // console.log("Processing frame", video.currentTime, video.videoWidth, video.videoHeight);
                 try {
                     await handsRef.current.send({ image: video });
                 } catch (err) {
                     console.error("MediaPipe error:", err);
                 }
-            } else {
-                // console.log("Frame skipped: time not advanced");
             }
 
             if (active) {
@@ -226,8 +302,10 @@ export function useSignLanguage({ videoRef, isEnabled }: UseSignLanguageProps) {
         };
 
         if (isEnabled) {
-            // console.log("Starting animation frame loop");
             frameIdRef.current = requestAnimationFrame(processVideo);
+            // Reset state when enabled
+            detectionBufferRef.current = [];
+            lastProcessedGestureRef.current = "";
         } else {
             cancelAnimationFrame(frameIdRef.current);
             setDetectedGesture("");
@@ -239,5 +317,11 @@ export function useSignLanguage({ videoRef, isEnabled }: UseSignLanguageProps) {
         };
     }, [isEnabled, isModelLoading]);
 
-    return { detectedGesture, confidence, isModelLoading };
+    return {
+        detectedGesture,
+        confidence,
+        isModelLoading,
+        currentSentence,
+        confirmedSentence
+    };
 }

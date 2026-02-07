@@ -12,17 +12,19 @@ interface Participant {
     isVideoOff?: boolean;
     isLocal?: boolean;
     role?: "signer" | "speaker";
-    caption?: string;
+    caption?: { confirmed: string, forming: string };
 }
 
 interface VideoGridProps {
     participants: Participant[];
     localStream?: MediaStream;
+    captions?: Record<string, { confirmed: string, forming: string }>;
 }
 
 export default function VideoGrid({
     participants,
     localStream,
+    captions,
 }: VideoGridProps) {
     const getGridLayout = (count: number) => {
         if (count === 1) return "grid-cols-1";
@@ -42,6 +44,7 @@ export default function VideoGrid({
                     key={participant.id}
                     participant={participant}
                     localStream={participant.isLocal ? localStream : undefined}
+                    caption={captions ? captions[participant.isLocal ? "local" : participant.id] : undefined}
                 />
             ))}
         </div>
@@ -51,9 +54,10 @@ export default function VideoGrid({
 interface VideoTileProps {
     participant: Participant;
     localStream?: MediaStream;
+    caption?: { confirmed: string, forming: string };
 }
 
-function VideoTile({ participant, localStream }: VideoTileProps) {
+function VideoTile({ participant, localStream, caption }: VideoTileProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
@@ -159,11 +163,20 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
                 </div>
             )}
 
-            {/* Caption Overlay */}
-            {participant.caption && (
-                <div className="absolute bottom-16 left-4 right-4 text-center pointer-events-none">
-                    <span className="inline-block px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg text-white text-lg font-medium shadow-sm border border-white/10">
-                        {participant.caption}
+            {/* YouTube Style Caption Overlay */}
+            {caption && (caption.confirmed || caption.forming) && (
+                <div className="absolute bottom-12 left-1/2 -translate-x-1/2 max-w-[95%] w-full text-center pointer-events-none z-20">
+                    <span className="inline-block px-4 py-2 bg-black/70 backdrop-blur-sm rounded-lg shadow-lg border border-white/5 leading-relaxed">
+                        {caption.confirmed && (
+                            <span className="text-white text-lg font-medium drop-shadow-sm">
+                                {caption.confirmed}
+                            </span>
+                        )}
+                        {caption.forming && (
+                            <span className="text-gray-300 text-lg font-medium ml-2 drop-shadow-sm">
+                                {caption.forming}
+                            </span>
+                        )}
                     </span>
                 </div>
             )}

@@ -55,8 +55,7 @@ export default function Room() {
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isOptionsOpen, setIsOptionsOpen] = useState(false);
     const [isSignMode, setIsSignMode] = useState(false);
-    const [sentenceBuffer, setSentenceBuffer] = useState("");
-    const [captions, setCaptions] = useState<Record<string, string>>({});
+    const [captions, setCaptions] = useState<Record<string, { confirmed: string, forming: string }>>({});
     const [messages, setMessages] = useState<
         Array<{
             id: string;
@@ -84,57 +83,84 @@ export default function Room() {
         socket,
         localStream,
         onMessage: (peerId, message) => {
-            setCaptions((prev) => ({
-                ...prev,
-                [peerId]: message,
-            }));
+            try {
+                const data = JSON.parse(message);
+                if (data.type === "caption") {
+                    setCaptions((prev) => ({
+                        ...prev,
+                        [peerId]: { confirmed: data.confirmed, forming: data.forming },
+                    }));
 
-            // Clear caption after 3 seconds if not replaced
-            // (Optional, but let's keep it simple for now as per user request "every second")
-            setTimeout(() => {
-                setCaptions((prev) => {
-                    if (prev[peerId] === message) {
-                        const newCaptions = { ...prev };
-                        delete newCaptions[peerId];
-                        return newCaptions;
-                    }
-                    return prev;
-                });
-            }, 3000);
+                    // Clear caption after a delay if both are empty (rare) or maybe just keep them until replaced?
+                    // YouTube captions differ: they stay for a bit then disappear.
+                    // If 'forming' is empty and 'confirmed' is set, it means a sentence just finished.
+                    // We can clear it after 5 seconds of no activity.
+                    // But managing timers per peer is complex.
+                    // Let's just set a timeout to clear *everything* for that peer if no update comes.
+                    // Actually, rely on updates. If they start a new sentence, 'confirmed' might still be the old one?
+                    // The hook `confirmedSentence` state persists until the *next* confirmation?
+                    // No, `setConfirmedSentence` is called on Enter. It stays there.
+                    // Ideally `confirmedSentence` should fade out.
+                    // Let's implement fade out in UI (VideoGrid) or just keep it simple: showing the last confirmed sentence is good context.
+
+                    // Allow simple clearing
+                    setTimeout(() => {
+                        setCaptions((prev) => {
+                            // Only clear if it hasn't changed
+                            if (prev[peerId]?.confirmed === data.confirmed && prev[peerId]?.forming === data.forming) {
+                                // If it's old, maybe clear 'confirmed' but keep 'forming'?
+                                // If 'forming' hasn't changed in 5s, maybe clear it too?
+                                const newCaptions = { ...prev };
+                                delete newCaptions[peerId];
+                                return newCaptions;
+                            }
+                            return prev;
+                        });
+                    }, 5000);
+                }
+            } catch (e) {
+                // Fallback for plain text messages if any (backward compatibility or chat)
+                console.log("Received non-JSON message or chat:", message);
+            }
         }
     });
 
     // Sign Language Integration
     const hiddenVideoRef = useRef<HTMLVideoElement>(null);
-    const { detectedGesture, confidence } = useSignLanguage({
+    const { detectedGesture, confidence, currentSentence, confirmedSentence } = useSignLanguage({
         videoRef: hiddenVideoRef,
         isEnabled: isSignMode && !!localStream,
     });
 
-    // Send detected gesture
+    // Send captions
     useEffect(() => {
-        if (detectedGesture && confidence > 0.6) {
-            sendMessage(detectedGesture);
+        if (confirmedSentence || currentSentence) {
+            const payload = JSON.stringify({
+                type: 'caption',
+                confirmed: confirmedSentence,
+                forming: currentSentence
+            });
+            sendMessage(payload);
 
-            // Also show locally
+            // Update local display
             setCaptions(prev => ({
                 ...prev,
-                local: detectedGesture
+                local: { confirmed: confirmedSentence, forming: currentSentence }
             }));
 
-            // Clear local
+            // Clear local after delay
             setTimeout(() => {
                 setCaptions(prev => {
-                    if (prev.local === detectedGesture) {
+                    if (prev.local?.confirmed === confirmedSentence && prev.local?.forming === currentSentence) {
                         const newC = { ...prev };
                         delete newC.local;
                         return newC;
                     }
                     return prev;
                 });
-            }, 2000);
+            }, 5000);
         }
-    }, [detectedGesture, confidence, sendMessage]);
+    }, [confirmedSentence, currentSentence, sendMessage]);
 
     // Redirect if missing required params
     useEffect(() => {
@@ -297,11 +323,11 @@ export default function Room() {
 
         setParticipants([localParticipant, ...remotePeers]);
 
-        console.log("Participants updated:", {
+        /* console.log("Participants updated:", {
             total: 1 + remotePeers.length,
             local: localParticipant.name,
             remote: remotePeers.map((p) => p.name),
-        });
+        }); */
     }, [remoteStreams, name, isMicOn, isCamOn, role, localStream, captions]);
 
     const handleEndCall = () => {
@@ -311,13 +337,7 @@ export default function Room() {
         navigate("/");
     };
 
-    const handleSend = () => {
-        // TODO: Send sentenceBuffer via signaling
-        if (sentenceBuffer.trim()) {
-            handleSendMessage(sentenceBuffer, "sign-text");
-            setSentenceBuffer("");
-        }
-    };
+
 
     const handleSendMessage = (
         message: string,
@@ -405,6 +425,7 @@ export default function Room() {
                     <VideoGrid
                         participants={participants}
                         localStream={localStream}
+                        captions={captions}
                     />
 
                     {/* Hidden video for KNN processing */}
@@ -436,51 +457,8 @@ export default function Room() {
                         </div>
                     )}
 
-                    {/* Detected Gesture Overlay for Signers */}
-                    {role === "signer" && detectedGesture && (
-                        <div className="absolute top-4 left-4">
-                            <Card className="border-green-500/50 bg-green-500/10 backdrop-blur-sm">
-                                <CardContent className="p-4">
-                                    <div className="text-sm text-green-500 font-medium mb-1">
-                                        Detected Sign
-                                    </div>
-                                    <div className="text-3xl font-bold text-green-500">
-                                        {detectedGesture}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
 
-                    {/* Sentence Buffer for Signers */}
-                    {role === "signer" && (
-                        <div className="absolute bottom-20 left-4 right-4">
-                            <Card className="backdrop-blur-sm bg-card/90">
-                                <CardContent className="p-3 space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs text-muted-foreground">
-                                            Building sentence...
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            value={sentenceBuffer}
-                                            readOnly
-                                            placeholder="Your signs will appear here..."
-                                            className="flex-1"
-                                        />
-                                        <Button
-                                            onClick={handleSend}
-                                            disabled={!sentenceBuffer.trim()}
-                                            size="icon"
-                                        >
-                                            <Check className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
+
                 </div>
 
                 {/* Chat Panel Sidebar (Toggleable) */}
