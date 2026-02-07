@@ -39,7 +39,7 @@ function normalizeLandmarks(landmarks) {
   ]);
 }
 
-// ---------------- KNN (k = 1) ----------------
+// ---------------- KNN ----------------
 const K = 5; // Change this value to adjust K
 
 function euclidean(a, b) {
