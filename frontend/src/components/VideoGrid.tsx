@@ -87,7 +87,7 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
                 autoPlay
                 playsInline
                 muted={participant.isLocal}
-                className={`w-full h-full object-cover ${participant.isLocal ? "scale-x-[-1]" : ""} ${participant.isVideoOff ? "hidden" : ""}`}
+                className={`w-full h-full object-cover ${participant.isVideoOff ? "hidden" : ""}`}
             />
 
             {/* Placeholder when video is off */}
