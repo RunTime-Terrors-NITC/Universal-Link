@@ -116,11 +116,10 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
                     </Badge>
                     {participant.role && (
                         <Badge
-                            className={`${
-                                participant.role === "signer"
+                            className={`${participant.role === "signer"
                                     ? "bg-green-500/80 hover:bg-green-500"
                                     : "bg-blue-500/80 hover:bg-blue-500"
-                            } backdrop-blur-sm`}
+                                } backdrop-blur-sm`}
                         >
                             {participant.role === "signer" ? "👋" : "🎤"}
                         </Badge>

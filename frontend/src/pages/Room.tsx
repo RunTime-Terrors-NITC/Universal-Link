@@ -279,8 +279,8 @@ export default function Room() {
                     <div className="flex items-center gap-3">
                         <div
                             className={`px-3 py-1 rounded-full text-sm font-medium ${role === "signer"
-                                    ? "bg-green-500/10 text-green-500"
-                                    : "bg-blue-500/10 text-blue-500"
+                                ? "bg-green-500/10 text-green-500"
+                                : "bg-blue-500/10 text-blue-500"
                                 }`}
                         >
                             {role === "signer" ? "👋 Signer" : "🎤 Speaker"}{" "}
@@ -464,8 +464,8 @@ export default function Room() {
                                             </div>
                                             <div
                                                 className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${isSignMode
-                                                        ? "bg-primary border-primary"
-                                                        : "border-muted-foreground"
+                                                    ? "bg-primary border-primary"
+                                                    : "border-muted-foreground"
                                                     }`}
                                             >
                                                 {isSignMode && (
@@ -496,8 +496,8 @@ export default function Room() {
                                             </div>
                                             <div
                                                 className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${!isTtsOn
-                                                        ? "bg-primary border-primary"
-                                                        : "border-muted-foreground"
+                                                    ? "bg-primary border-primary"
+                                                    : "border-muted-foreground"
                                                     }`}
                                             >
                                                 {!isTtsOn && (
