@@ -56,11 +56,16 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
-        if (videoRef.current && (participant.stream || localStream)) {
-            videoRef.current.srcObject =
-                participant.stream || localStream || null;
+        if (!videoRef.current) return;
+
+        // Use participant.stream if available, otherwise use localStream for local participant
+        const streamToUse =
+            participant.stream || (participant.isLocal ? localStream : null);
+
+        if (streamToUse) {
+            videoRef.current.srcObject = streamToUse;
         }
-    }, [participant.stream, localStream]);
+    }, [participant.stream, participant.isLocal, localStream]);
 
     const getInitials = (name: string) => {
         return name
@@ -71,10 +76,15 @@ function VideoTile({ participant, localStream }: VideoTileProps) {
             .slice(0, 2);
     };
 
+    // Determine if we should show video
+    const hasStream =
+        participant.stream || (participant.isLocal && localStream);
+    const shouldShowVideo = !participant.isVideoOff && hasStream;
+
     return (
         <Card className="relative py-0 overflow-hidden bg-muted/20 h-full group">
             {/* Video Element */}
-            {!participant.isVideoOff && (participant.stream || localStream) ? (
+            {shouldShowVideo ? (
                 <video
                     ref={videoRef}
                     autoPlay

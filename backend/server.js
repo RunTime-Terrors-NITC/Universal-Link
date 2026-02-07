@@ -34,7 +34,14 @@ function onConnected(socket) {
 
     socket.on("join-room", (roomId) => {
         socket.join(roomId);
-        socket.to(roomId).emit(`new user joined to ${roomId} : `, socket.id);
+
+        // Notify others in the room that a new user joined
+        socket.to(roomId).emit("user-joined", { userId: socket.id });
+
+        console.log(`${socket.id} joined room ${roomId}`);
+
+        // Send back confirmation with current users in room (optional)
+        socket.emit("joined-room", { roomId, userId: socket.id });
     });
 
     socket.on("offer", ({ offer, to }) => {
@@ -49,8 +56,20 @@ function onConnected(socket) {
         socket.to(to).emit("ice-candidate", { candidate, from: socket.id });
     });
 
+    socket.on("leave-room", (roomId) => {
+        socket.to(roomId).emit("user-left", { userId: socket.id });
+        socket.leave(roomId);
+        console.log(`${socket.id} left room ${roomId}`);
+    });
+
     socket.on("disconnect", () => {
-        console.log("Socket Disconnected: ", socket.id);
+        console.log("Socket Disconnected:", socket.id);
+        // Notify all rooms this user was in
+        Array.from(socket.rooms).forEach((room) => {
+            if (room !== socket.id) {
+                socket.to(room).emit("user-left", { userId: socket.id });
+            }
+        });
     });
 
     socket.on("error", (error) => {

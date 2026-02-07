@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { io } from "socket.io-client";
+import { useState, useEffect, useRef } from "react";
+import { io, Socket } from "socket.io-client";
 import {
     Mic,
     MicOff,
@@ -28,13 +28,22 @@ import {
 import { Input } from "@/components/ui/input";
 import ChatPanel from "@/components/ChatPanel";
 import VideoGrid from "@/components/VideoGrid";
-
-const socket = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:4000");
+import { useWebRTC } from "@/hooks/useWebRTC";
 
 export default function Room() {
     const location = useLocation();
     const navigate = useNavigate();
     const { name, roomId, role } = location.state || {};
+
+    // Socket ref to prevent recreation on re-renders and shared state between tabs
+    const socketRef = useRef<Socket | null>(null);
+
+    // Initialize socket once
+    if (!socketRef.current) {
+        socketRef.current = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:4000");
+    }
+
+    const socket = socketRef.current;
 
     const [isMicOn, setIsMicOn] = useState(true);
     const [isCamOn, setIsCamOn] = useState(true);
@@ -68,16 +77,26 @@ export default function Room() {
         },
     ]);
 
-    // Initialize media stream and socket connection on mount
-    useEffect(() => {
-        // if (!name || !roomId || !role) {
-        //     navigate("/");
-        // }
+    const { remoteStreams } = useWebRTC({
+        roomId: roomId || "",
+        socket,
+        localStream,
+    });
 
-        // Initialize local media stream
+    // Redirect if missing required params
+    useEffect(() => {
+        if (!name || !roomId || !role) {
+            navigate("/");
+        }
+    }, [name, roomId, role, navigate]);
+
+    // Initialize local media stream
+    useEffect(() => {
+        let stream: MediaStream | null = null;
+
         const initMediaStream = async () => {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
+                stream = await navigator.mediaDevices.getUserMedia({
                     video: true,
                     audio: true,
                 });
@@ -89,37 +108,102 @@ export default function Room() {
 
         initMediaStream();
 
-        // Setup socket event listeners
-        socket.on("connect", () => {
-            console.log("Connected to server:", socket.id);
-            setIsConnected(true);
-        });
-
-        socket.on("disconnect", () => {
-            console.log("Disconnected from server");
-            setIsConnected(false);
-        });
-
-        // Cleanup on unmount
+        // Cleanup: stop tracks on unmount
         return () => {
-            if (localStream) {
-                localStream.getTracks().forEach((track) => track.stop());
+            if (stream) {
+                stream.getTracks().forEach((track) => track.stop());
             }
-            socket.off("connect");
-            socket.off("disconnect");
         };
     }, []);
 
-    // Update participants when mic/cam state changes
+    // Setup socket event listeners
     useEffect(() => {
-        setParticipants((prev) =>
-            prev.map((p) =>
-                p.isLocal
-                    ? { ...p, isMuted: !isMicOn, isVideoOff: !isCamOn }
-                    : p,
-            ),
+        const handleConnect = () => {
+            console.log("Connected to server:", socket.id);
+            setIsConnected(true);
+            // Join room after connection is established
+            if (roomId) {
+                socket.emit("join-room", roomId);
+            }
+        };
+
+        const handleDisconnect = () => {
+            console.log("Disconnected from server");
+            setIsConnected(false);
+        };
+
+        socket.on("connect", handleConnect);
+        socket.on("disconnect", handleDisconnect);
+
+        // If already connected, join room immediately
+        if (socket.connected && roomId) {
+            handleConnect();
+        }
+
+        // Cleanup
+        return () => {
+            socket.off("connect", handleConnect);
+            socket.off("disconnect", handleDisconnect);
+            if (roomId) {
+                socket.emit("leave-room", roomId);
+            }
+        };
+    }, [roomId]);
+
+    // Update local participant when mic/cam state changes
+    useEffect(() => {
+        // Enable/disable actual audio track
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = isMicOn;
+            }
+        }
+    }, [isMicOn, localStream]);
+
+    // Update video track when camera state changes
+    useEffect(() => {
+        // Enable/disable actual video track
+        if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = isCamOn;
+            }
+        }
+    }, [isCamOn, localStream]);
+
+    // Update participants list with local and remote streams
+    useEffect(() => {
+        const remotePeers = Array.from(remoteStreams.entries()).map(
+            ([id, stream]) => ({
+                id,
+                name: `User ${id.substring(0, 4)}`,
+                isLocal: false,
+                isMuted: false,
+                isVideoOff: false,
+                role: "speaker" as const,
+                stream,
+            }),
         );
-    }, [isMicOn, isCamOn]);
+
+        const localParticipant = {
+            id: "local",
+            name: name || "You",
+            isLocal: true,
+            isMuted: !isMicOn,
+            isVideoOff: !isCamOn,
+            role: role as "signer" | "speaker",
+            stream: localStream,
+        };
+
+        setParticipants([localParticipant, ...remotePeers]);
+
+        console.log("Participants updated:", {
+            total: 1 + remotePeers.length,
+            local: localParticipant.name,
+            remote: remotePeers.map((p) => p.name),
+        });
+    }, [remoteStreams, name, isMicOn, isCamOn, role, localStream]);
 
     const handleEndCall = () => {
         if (localStream) {
@@ -194,11 +278,10 @@ export default function Room() {
                     </div>
                     <div className="flex items-center gap-3">
                         <div
-                            className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                role === "signer"
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${role === "signer"
                                     ? "bg-green-500/10 text-green-500"
                                     : "bg-blue-500/10 text-blue-500"
-                            }`}
+                                }`}
                         >
                             {role === "signer" ? "👋 Signer" : "🎤 Speaker"}{" "}
                             Mode
@@ -380,11 +463,10 @@ export default function Room() {
                                                 </div>
                                             </div>
                                             <div
-                                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
-                                                    isSignMode
+                                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${isSignMode
                                                         ? "bg-primary border-primary"
                                                         : "border-muted-foreground"
-                                                }`}
+                                                    }`}
                                             >
                                                 {isSignMode && (
                                                     <Check className="h-3 w-3 text-primary-foreground" />
@@ -413,11 +495,10 @@ export default function Room() {
                                                 </div>
                                             </div>
                                             <div
-                                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
-                                                    !isTtsOn
+                                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${!isTtsOn
                                                         ? "bg-primary border-primary"
                                                         : "border-muted-foreground"
-                                                }`}
+                                                    }`}
                                             >
                                                 {!isTtsOn && (
                                                     <Check className="h-3 w-3 text-primary-foreground" />
