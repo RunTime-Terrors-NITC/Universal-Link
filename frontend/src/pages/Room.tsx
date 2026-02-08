@@ -134,12 +134,8 @@ export default function Room() {
     // Sign Language Integration
     const hiddenVideoRef = useRef<HTMLVideoElement>(null);
     const {
-        detectedGesture,
-        confidence,
         currentSentence,
-        confirmedSentence,
-        confirmSentence,
-        clearSentence
+        confirmedSentence
     } = useSignLanguage({
         videoRef: hiddenVideoRef,
         isEnabled: isSignMode && !!localStream,
