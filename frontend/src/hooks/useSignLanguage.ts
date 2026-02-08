@@ -27,7 +27,7 @@ export function useSignLanguage({ videoRef, canvasRef, isEnabled, isSignMode }: 
 
     // Refs
     const recognizerRef = useRef<GestureRecognizer | null>(null);
-    const requestRef = useRef<number>();
+    const requestRef = useRef<number>(undefined);
     const referenceDataRef = useRef<ReferenceSample[]>([]);
     const bufferRef = useRef<string[]>([]);
     const lastProcessedTimeRef = useRef<number>(0);
